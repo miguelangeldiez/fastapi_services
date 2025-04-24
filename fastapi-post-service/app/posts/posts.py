@@ -78,8 +78,9 @@ async def create_post(
         is_published=payload.is_published,
         author_id=user.id,
     )
-    db.add(new_post)
+    
     try:
+        db.add(new_post)
         # fuerza el INSERT
         await db.flush()              
         # confirma la transacción
@@ -87,6 +88,7 @@ async def create_post(
         # recarga el objeto con valores de BD
         await db.refresh(new_post)    
     except Exception as e:
+        import traceback; traceback.print_exc()
         # revierte si algo falla
         await db.rollback()           
         raise HTTPException(
