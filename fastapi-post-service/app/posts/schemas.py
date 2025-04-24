@@ -13,7 +13,13 @@ T = TypeVar("T")
 
 
 class PostCreate(BaseModel):
+    title: str
     content: str
+    is_published: bool = False
+
+    class Config:
+        from_attributes = True
+
 
 
 class PostOut(BaseModel):

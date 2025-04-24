@@ -56,31 +56,31 @@ async def get_all_posts(
     )
 
 @router.post(
-    "/create_post",
-    response_model=MessageResponse[PostOut],
-    status_code=status.HTTP_201_CREATED,
-    summary="Crear una nueva publicación"
-)
-def create_post(
-    payload: PostCreate,
-    db: AsyncSession= Depends(get_db_session),
-    user: User = Depends(current_active_user),
-):
-    new_post = Post(content=payload.content, user_id=user.id)
-    db.add(new_post)
-    try:
-        db.commit()
-        db.refresh(new_post)
-    except Exception:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error al crear la publicación."
-        )
-    return MessageResponse(
-        msg="Publicación creada con éxito.",
-        data=new_post
-    )
+     "/create_post",
+     response_model=MessageResponse[PostOut],
+     status_code=status.HTTP_201_CREATED,
+     summary="Crear una nueva publicación"
+ )
+async def create_post(
+     payload: PostCreate,
+     db: AsyncSession = Depends(get_db_session),
+     user: User = Depends(current_active_user),
+ ):
+     new_post = Post(title=payload.title,content=payload.content, author_id=user.id)
+     db.add(new_post)
+     try:
+         await db.commit()
+         await db.refresh(new_post)
+     except Exception:
+         await db.rollback()
+         raise HTTPException(
+             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+             detail="Error al crear la publicación."
+         )
+     return MessageResponse(
+         msg="Publicación creada con éxito.",
+         data=new_post
+     )
 
 
 @router.delete(
