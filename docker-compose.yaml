@@ -34,7 +34,19 @@ services:
       - db
     volumes:
       - ./fastapi-post-service:/app
-
+  
+  profile-service:
+    build:
+      context: ./fastapi-profile-service
+    env_file:
+      - .env
+    container_name: fastapi-profile-service
+    ports:
+      - "8002:8000"
+    depends_on:
+      - db
+    volumes:
+      - ./fastapi-profile-service:/app
 
 volumes:
   pgdata:
