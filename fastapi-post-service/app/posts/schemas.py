@@ -6,7 +6,7 @@ from fastapi_users import BaseUserManager, UUIDIDMixin
 from pydantic import BaseModel
 from app.config import get_settings
 from app.db.post import User
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 from pydantic.generics import GenericModel
 
 T = TypeVar("T")
@@ -25,11 +25,14 @@ class PostCreate(BaseModel):
 class PostOut(BaseModel):
     id: UUID
     content: str
-    user_id: UUID
-    timestamp: datetime
-
+    is_published: bool
+    
+    user_id: UUID       = Field(..., alias="author_id")
+    timestamp: datetime = Field(..., alias="created_at")
+    updated_at: datetime
     class Config:
         from_attributes = True
+        allow_population_by_field_name = True
 
 
 class CommentOut(BaseModel):
