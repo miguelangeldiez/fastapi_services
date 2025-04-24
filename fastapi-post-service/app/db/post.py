@@ -19,10 +19,12 @@ class Post(Base):
     title = Column(String(200), nullable=False, index=True)
     content = Column(Text, nullable=False)
     comments = relationship("Comment", back_populates="post")
-    author = relationship("User", back_populates="posts",lazy="dynamic")
+    author = relationship("User", backref="posts")
     is_published = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default= datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime,default= datetime.now(timezone.utc),onupdate= datetime.now(timezone.utc),nullable=False)
+
+    
 
     
     
@@ -54,5 +56,6 @@ class Comment(Base):
         nullable=False,
     )
 
-    user = relationship("User", back_populates="comments",lazy="dynamic")
+    user = relationship("User", backref="comments")
     post = relationship("Post", back_populates="comments")
+   
