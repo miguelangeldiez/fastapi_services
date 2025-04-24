@@ -12,13 +12,12 @@ from fastapi_users.authentication import (
 )
 import uuid
 
-from ..init_db import async_session
-from ..db_models.user import User
-from .manager import UserManager
-from ..config import get_settings
+from app.db import async_session
+from ..db.models import User
+from .schemas import UserManager
+from config import get_settings
 
 settings = get_settings()
-
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """
@@ -26,7 +25,6 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """
     async with async_session() as session:
         yield session
-
 
 async def get_user_db(
     session: AsyncSession = Depends(get_db_session),
@@ -36,7 +34,6 @@ async def get_user_db(
     """
     yield SQLAlchemyUserDatabase(session, User)
 
-
 async def get_user_manager(
     user_db: SQLAlchemyUserDatabase = Depends(get_user_db),
 ) -> AsyncGenerator[UserManager, None]:
@@ -45,6 +42,11 @@ async def get_user_manager(
     """
     yield UserManager(user_db)
 
+def get_jwt_strategy() -> JWTStrategy:
+    return JWTStrategy(
+        secret=settings.JWT_SECRET_KEY,
+        lifetime_seconds=settings.JWT_LIFETIME_SECONDS,
+    )
 
 # --- Configuración de autenticación JWT vía cookie ---
 
@@ -54,14 +56,7 @@ cookie_transport = CookieTransport(
     cookie_max_age=3600,  # 1 hora
 )  # :contentReference[oaicite:4]{index=4}
 
-# 2) Estrategia JWT
-def get_jwt_strategy() -> JWTStrategy:
-    return JWTStrategy(
-        secret=settings.JWT_SECRET_KEY,
-        lifetime_seconds=settings.JWT_LIFETIME_SECONDS,
-    )  # :contentReference[oaicite:5]{index=5}
-
-# 3) Backend de autenticación
+# 2) Backend de autenticación
 auth_backend = AuthenticationBackend(
     name="jwt",
     transport=cookie_transport,

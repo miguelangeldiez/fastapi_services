@@ -13,7 +13,7 @@ from fastapi_users.authentication import (
 import uuid
 
 from app.db import async_session
-from ..db.post_model import User
+from ..db.models import User
 from .schemas import UserManager
 from config import get_settings
 

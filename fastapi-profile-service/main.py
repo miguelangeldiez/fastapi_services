@@ -1,34 +1,19 @@
-from fastapi import FastAPI, Depends
-from app.users.dependencies import fastapi_users, auth_backend, current_active_user
-from app.users.schemas import UserRead, UserCreate
-from app.db_models.user import User
+from fastapi import FastAPI
+from app.profile.profile_routes import router
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from app.init_db import init_db
+from app.db.main_db import engine,Base
 
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
-app = FastAPI(title="Auth Microservice",lifespan=lifespan)
+    await engine.dispose()
+    
+app = FastAPI(title="Post Microservice",lifespan=lifespan)
 
-# Login JWT
-app.include_router(
-    fastapi_users.get_auth_router(auth_backend),
-    prefix="/auth/jwt",
-    tags=["auth"]
-)
+app.include_router(router)
 
-# Registro de usuarios
-app.include_router(
-    fastapi_users.get_register_router(UserRead, UserCreate),
-    prefix="/auth",
-    tags=["auth"]
-)
-
-# Ruta protegida
-@app.get("/protected-route", tags=["users"])
-def protected(user: User = Depends(current_active_user)):
-    return {"message": f"Hola {user.email}, estás autenticado."}
