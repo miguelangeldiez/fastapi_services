@@ -46,10 +46,13 @@ async def get_all_posts(
     posts = result.scalars().all()
 
     return PaginatedPostsResponse(
-        total=total,
-        page=page,
-        per_page=per_page,
-        items=posts,
+        posts=posts,                                # lista de PostOut
+        total=total,                                # conteo total de registros
+        pages=ceil(total / per_page),               # total de páginas
+        current_page=page,                          # página actual
+        per_page=per_page,                          # elementos por página
+        has_next=(page * per_page) < total,         # hay siguiente?
+        has_prev=page > 1,                          # hay anterior?
     )
 
 @router.post(
