@@ -95,7 +95,13 @@ async def create_post(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al crear la publicación: {e}"
         )
-    return MessageResponse(msg="Publicación creada con éxito.", data=new_post)
+    post_out = PostOut(
+        id=new_post.id,
+        content=new_post.content,
+        user_id=new_post.author_id,        
+        timestamp=new_post.created_at,        
+    )
+    return MessageResponse(msg="Publicación creada con éxito.", data=post_out)
 
 
 @router.delete(

@@ -1,6 +1,6 @@
 # models.py
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey,func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship,Mapped, mapped_column
@@ -22,49 +22,25 @@ class Post(Base):
     author = relationship("User", backref="posts")
     is_published = Column(Boolean, default=False, nullable=False)
     created_at = Column(
-       DateTime,                # TIMESTAMP WITHOUT TIME ZONE
-       default=datetime.utcnow, # Python inyecta un datetime naïve UTC
-       nullable=False,
+        DateTime(timezone=True),          
+        server_default=func.now(),        
+        nullable=False,
     )
     updated_at = Column(
-       DateTime,
-       default=datetime.utcnow,
-       onupdate=datetime.utcnow,
-       nullable=False,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),             
+        nullable=False,
     )
-  
-
-    
-
-    
-    
 
 class Comment(Base):
     __tablename__ = "comments"
 
-    id = Column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-        unique=True,
-        nullable=False,
-    )
+    id = Column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4,unique=True,nullable=False,)
     content = Column(Text, nullable=False)
-    timestamp = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-    user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("user.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    post_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("posts.id", ondelete="CASCADE"),
-        nullable=False,
-    )
+    timestamp = Column(DateTime(timezone=True),server_default=func.now(),nullable=False)
+    user_id = Column(UUID(as_uuid=True),ForeignKey("user.id", ondelete="CASCADE"),nullable=False,)
+    post_id = Column(UUID(as_uuid=True),ForeignKey("posts.id", ondelete="CASCADE"),nullable=False,)
 
     user = relationship("User", backref="comments")
     post = relationship("Post", back_populates="comments")
