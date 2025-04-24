@@ -1,6 +1,5 @@
 # models.py
 import uuid
-from datetime import datetime, UTC
 from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey,func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship,Mapped, mapped_column

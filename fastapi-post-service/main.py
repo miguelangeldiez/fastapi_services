@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.posts.posts import router
+from app.posts.posts_routes import router
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.db.main_db import engine,Base

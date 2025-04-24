@@ -3,7 +3,6 @@ from app.users.dependencies import fastapi_users, auth_backend
 from app.users.schemas import UserRead, UserCreate
 from contextlib import asynccontextmanager
 from app.db.main_db import engine,Base
-from app.users.auth_router import token_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,5 +27,3 @@ app.include_router(
     tags=["auth"]
 )
 
-# Protege las rutas de los servcios
-app.include_router(token_router)

@@ -4,8 +4,8 @@ from uuid import UUID
 import uuid
 from fastapi_users import BaseUserManager, UUIDIDMixin
 from pydantic import BaseModel
-from app.config import get_settings
-from app.db.post import User
+from config import get_settings
+from app.db.post_model import User
 from pydantic import BaseModel,Field
 from pydantic.generics import GenericModel
 
@@ -19,7 +19,6 @@ class PostCreate(BaseModel):
 
     class Config:
         from_attributes = True
-
 
 
 class PostOut(BaseModel):

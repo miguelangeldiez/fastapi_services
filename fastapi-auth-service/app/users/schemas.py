@@ -1,8 +1,8 @@
 import uuid
 from fastapi_users import schemas,BaseUserManager, UUIDIDMixin
 from pydantic import BaseModel
-from app.config import get_settings
-from app.db.user import User
+from config import get_settings
+from app.db.user_model import User
 
 class UserRead(schemas.BaseUser[uuid.UUID]):
     username: str | None

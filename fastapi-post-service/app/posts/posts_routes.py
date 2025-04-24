@@ -5,12 +5,11 @@ from typing import List
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import joinedload
+from fastapi import APIRouter, Depends, HTTPException,status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .dependencies import get_db_session, current_active_user
-from ..db.post import Post, Comment, User
+from ..db.post_model import Post, Comment, User
 from .schemas import (
     PostCreate,
     PostOut,
@@ -95,37 +94,42 @@ async def create_post(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al crear la publicación: {e}"
         )
-    post_out = PostOut(
-        id=new_post.id,
-        content=new_post.content,
-        user_id=new_post.author_id,        
-        timestamp=new_post.created_at,        
-    )
-    return MessageResponse(msg="Publicación creada con éxito.", data=post_out)
+  
+    return MessageResponse(msg="Publicación creada con éxito.", data=new_post)
 
 
 @router.delete(
     "/delete_post/{post_id}",
     response_model=MessageResponse[None],
-    summary="Eliminar una publicación por ID",
+    status_code=status.HTTP_200_OK,
+    summary="Eliminar una publicación",
 )
-def delete_post(
+async def delete_post(
     post_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
     user: User = Depends(current_active_user),
 ):
-    post = db.query(Post).get(post_id)
-    if not post:
-        raise HTTPException(404, "Publicación no encontrada.")
-    if post.user_id != user.id:
-        raise HTTPException(403, "No tienes permiso para eliminar esta publicación.")
+    # 1) recuperar
+    post = await db.get(Post, post_id)
+    if not post or post.author_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Publicación no encontrada o no autorizada."
+        )
+
     try:
-        db.delete(post)
-        db.commit()
+        # 2) eliminar
+        await db.delete(post)
+        # 3) confirmar
+        await db.commit()
     except Exception:
-        db.rollback()
-        raise HTTPException(500, "Error al eliminar la publicación.")
-    return MessageResponse(msg="Publicación eliminada con éxito.")
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al eliminar la publicación."
+        )
+
+    return MessageResponse(msg="Publicación eliminada con éxito.", data=None)
 
 
 @router.get(
@@ -133,10 +137,19 @@ def delete_post(
     response_model=List[CommentOut],
     summary="Listar comentarios de una publicación",
 )
-def get_comments(post_id: uuid.UUID, db: AsyncSession = Depends(get_db_session)):
-    post = db.query(Post).options(joinedload(Post.comments)).get(post_id)
+async def get_comments(
+    post_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+):
+    # 1) Traer el post con sus comentarios
+    result = await db.execute(
+        select(Post)
+        .options(selectinload(Post.comments))
+        .where(Post.id == post_id)
+    )
+    post = result.scalar_one_or_none()
     if not post:
-        raise HTTPException(404, "Publicación no encontrada.")
+        raise HTTPException(status_code=404, detail="Publicación no encontrada.")
     return post.comments
 
 
@@ -145,20 +158,24 @@ def get_comments(post_id: uuid.UUID, db: AsyncSession = Depends(get_db_session))
     response_model=MessageResponse[None],
     summary="Eliminar un comentario por ID",
 )
-def delete_comment(
+async def delete_comment(
     comment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
     user: User = Depends(current_active_user),
 ):
-    comment = db.query(Comment).get(comment_id)
+    # 1) Recuperar el comentario
+    comment = await db.get(Comment, comment_id)
     if not comment:
-        raise HTTPException(404, "Comentario no encontrado.")
+        raise HTTPException(status_code=404, detail="Comentario no encontrado.")
     if comment.user_id != user.id:
-        raise HTTPException(403, "No tienes permiso para eliminar este comentario.")
+        raise HTTPException(status_code=403, detail="No tienes permiso para eliminar este comentario.")
+
     try:
-        db.delete(comment)
-        db.commit()
+        # 2) Eliminar y confirmar
+        await db.delete(comment)
+        await db.commit()
     except Exception:
-        db.rollback()
-        raise HTTPException(500, "Error al eliminar el comentario.")
-    return MessageResponse(msg="Comentario eliminado con éxito.")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Error al eliminar el comentario.")
+
+    return MessageResponse(msg="Comentario eliminado con éxito.", data=None)
