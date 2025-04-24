@@ -9,20 +9,25 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .dependencies import get_db_session,current_active_user
+from .dependencies import get_db_session, current_active_user
 from ..db.post import Post, Comment, User
 from .schemas import (
-    PostCreate, PostOut, CommentOut,
-    PaginatedPostsResponse, MessageResponse
+    PostCreate,
+    PostOut,
+    CommentOut,
+    PaginatedPostsResponse,
+    MessageResponse,
 )
 
-router = APIRouter(prefix="/posts", tags=["posts"],dependencies=[Depends(current_active_user)])
+router = APIRouter(
+    prefix="/posts", tags=["posts"], dependencies=[Depends(current_active_user)]
+)
 
 
 @router.get(
     "/all_posts",
     response_model=PaginatedPostsResponse,
-    summary="Listar todas las publicaciones paginadas"
+    summary="Listar todas las publicaciones paginadas",
 )
 async def get_all_posts(
     page: int = 1,
@@ -46,51 +51,56 @@ async def get_all_posts(
     posts = result.scalars().all()
 
     return PaginatedPostsResponse(
-        posts=posts,                                # lista de PostOut
-        total=total,                                # conteo total de registros
-        pages=ceil(total / per_page),               # total de páginas
-        current_page=page,                          # página actual
-        per_page=per_page,                          # elementos por página
-        has_next=(page * per_page) < total,         # hay siguiente?
-        has_prev=page > 1,                          # hay anterior?
+        posts=posts,  # lista de PostOut
+        total=total,  # conteo total de registros
+        pages=ceil(total / per_page),  # total de páginas
+        current_page=page,  # página actual
+        per_page=per_page,  # elementos por página
+        has_next=(page * per_page) < total,  # hay siguiente?
+        has_prev=page > 1,  # hay anterior?
     )
 
+
 @router.post(
-     "/create_post",
-     response_model=MessageResponse[PostOut],
-     status_code=status.HTTP_201_CREATED,
-     summary="Crear una nueva publicación"
- )
+    "/create_post",
+    response_model=MessageResponse[PostOut],
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear una nueva publicación",
+)
 async def create_post(
-     payload: PostCreate,
-     db: AsyncSession = Depends(get_db_session),
-     user: User = Depends(current_active_user),
- ):
-     new_post = Post(title=payload.title,content=payload.content, author_id=user.id)
-     db.add(new_post)
-     try:
-         await db.commit()
-         await db.refresh(new_post)
-     except Exception:
-         await db.rollback()
-         raise HTTPException(
-             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-             detail="Error al crear la publicación."
-         )
-     return MessageResponse(
-         msg="Publicación creada con éxito.",
-         data=new_post
-     )
+    payload: PostCreate,
+    db: AsyncSession = Depends(get_db_session),
+    user: User = Depends(current_active_user),
+):
+    new_post = Post(
+        title=payload.title,
+        content=payload.content,
+        is_published=payload.is_published,
+        author_id=user.id,
+    )
+    try:
+        # Iniciamos explícitamente la transacción
+        async with db.begin():
+            db.add(new_post)
+        # Tras el commit implícito en db.begin(), refrescamos la instancia
+        await db.refresh(new_post)
+    except Exception as e:
+        # Si algo falla dentro de db.begin(), la transacción ya hace rollback
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al crear la publicación: {e}"
+        )
+    return MessageResponse(msg="Publicación creada con éxito.", data=new_post)
 
 
 @router.delete(
     "/delete_post/{post_id}",
     response_model=MessageResponse[None],
-    summary="Eliminar una publicación por ID"
+    summary="Eliminar una publicación por ID",
 )
 def delete_post(
     post_id: uuid.UUID,
-    db: AsyncSession= Depends(get_db_session),
+    db: AsyncSession = Depends(get_db_session),
     user: User = Depends(current_active_user),
 ):
     post = db.query(Post).get(post_id)
@@ -110,17 +120,10 @@ def delete_post(
 @router.get(
     "/{post_id}/comments",
     response_model=List[CommentOut],
-    summary="Listar comentarios de una publicación"
+    summary="Listar comentarios de una publicación",
 )
-def get_comments(
-    post_id: uuid.UUID,
-    db: AsyncSession= Depends(get_db_session)
-):
-    post = (
-        db.query(Post)
-        .options(joinedload(Post.comments))
-        .get(post_id)
-    )
+def get_comments(post_id: uuid.UUID, db: AsyncSession = Depends(get_db_session)):
+    post = db.query(Post).options(joinedload(Post.comments)).get(post_id)
     if not post:
         raise HTTPException(404, "Publicación no encontrada.")
     return post.comments
@@ -129,11 +132,11 @@ def get_comments(
 @router.delete(
     "/comments/{comment_id}",
     response_model=MessageResponse[None],
-    summary="Eliminar un comentario por ID"
+    summary="Eliminar un comentario por ID",
 )
 def delete_comment(
     comment_id: uuid.UUID,
-    db: AsyncSession= Depends(get_db_session),
+    db: AsyncSession = Depends(get_db_session),
     user: User = Depends(current_active_user),
 ):
     comment = db.query(Comment).get(comment_id)
