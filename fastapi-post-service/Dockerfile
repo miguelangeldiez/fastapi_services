@@ -17,10 +17,10 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
 # Copia el código fuente
-COPY ./app ./app
+COPY . .
 
 # Expone el puerto para FastAPI
 EXPOSE 8000
 
 # Comando por defecto para levantar el microservicio
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
