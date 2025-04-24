@@ -2,6 +2,8 @@
 import uuid
 from math import ceil
 from typing import List
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import joinedload
@@ -22,36 +24,33 @@ router = APIRouter(prefix="/posts", tags=["posts"],dependencies=[Depends(current
     response_model=PaginatedPostsResponse,
     summary="Listar todas las publicaciones paginadas"
 )
-def get_all_posts(
-    page: int = Query(1, ge=1),
-    per_page: int = Query(10, ge=1, le=100),
-    db: AsyncSession= Depends(get_db_session)
-):
-    # Query con joinedload para cargar usuario, likes y comentarios
-    base_q = db.query(Post).options(
-        joinedload(Post.user),
-        joinedload(Post.likes),
-        joinedload(Post.comments)
-    )
-    total = base_q.count()
-    posts = (
-        base_q
-        .order_by(Post.timestamp.desc())
+async def get_all_posts(
+    page: int = 1,
+    per_page: int = 10,
+    db: AsyncSession = Depends(get_db_session),
+) -> PaginatedPostsResponse:
+    total_stmt = select(func.count()).select_from(Post)
+    total_result = await db.execute(total_stmt)
+    total = total_result.scalar_one()
+
+    stmt = (
+        select(Post)
+        .options(
+            selectinload(Post.comments),
+            selectinload(Post.author),
+        )
         .offset((page - 1) * per_page)
         .limit(per_page)
-        .all()
     )
+    result = await db.execute(stmt)
+    posts = result.scalars().all()
 
     return PaginatedPostsResponse(
-        posts=posts,
         total=total,
-        pages=ceil(total / per_page),
-        current_page=page,
+        page=page,
         per_page=per_page,
-        has_next=page * per_page < total,
-        has_prev=page > 1
+        items=posts,
     )
-
 
 @router.post(
     "/create_post",
