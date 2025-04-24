@@ -21,8 +21,18 @@ class Post(Base):
     comments = relationship("Comment", back_populates="post")
     author = relationship("User", backref="posts")
     is_published = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime(timezone=True),server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True),server_default=func.now(),onupdate= datetime.now(timezone.utc),nullable=False)
+    created_at = Column(
+       DateTime,                # TIMESTAMP WITHOUT TIME ZONE
+       default=datetime.utcnow, # Python inyecta un datetime naïve UTC
+       nullable=False,
+    )
+    updated_at = Column(
+       DateTime,
+       default=datetime.utcnow,
+       onupdate=datetime.utcnow,
+       nullable=False,
+    )
+  
 
     
 
