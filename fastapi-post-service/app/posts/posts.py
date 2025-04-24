@@ -78,14 +78,17 @@ async def create_post(
         is_published=payload.is_published,
         author_id=user.id,
     )
+    db.add(new_post)
     try:
-        # Iniciamos explícitamente la transacción
-        async with db.begin():
-            db.add(new_post)
-        # Tras el commit implícito en db.begin(), refrescamos la instancia
-        await db.refresh(new_post)
+        # fuerza el INSERT
+        await db.flush()              
+        # confirma la transacción
+        await db.commit()             
+        # recarga el objeto con valores de BD
+        await db.refresh(new_post)    
     except Exception as e:
-        # Si algo falla dentro de db.begin(), la transacción ya hace rollback
+        # revierte si algo falla
+        await db.rollback()           
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al crear la publicación: {e}"
