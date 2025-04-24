@@ -23,7 +23,7 @@ class PostOut(BaseModel):
     timestamp: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class CommentOut(BaseModel):
@@ -34,7 +34,7 @@ class CommentOut(BaseModel):
     timestamp: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class PaginatedPostsResponse(BaseModel):

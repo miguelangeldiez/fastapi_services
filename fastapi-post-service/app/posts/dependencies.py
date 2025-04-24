@@ -42,6 +42,12 @@ async def get_user_manager(
     """
     yield UserManager(user_db)
 
+def get_jwt_strategy() -> JWTStrategy:
+    return JWTStrategy(
+        secret=settings.JWT_SECRET_KEY,
+        lifetime_seconds=settings.JWT_LIFETIME_SECONDS,
+    )
+
 # --- Configuración de autenticación JWT vía cookie ---
 
 # 1) Definimos el transporte que usará cookies
@@ -54,10 +60,7 @@ cookie_transport = CookieTransport(
 auth_backend = AuthenticationBackend(
     name="jwt",
     transport=cookie_transport,
-    get_strategy=JWTStrategy(
-        secret=settings.JWT_SECRET_KEY,
-        lifetime_seconds=settings.JWT_LIFETIME_SECONDS,
-    ),
+    get_strategy=get_jwt_strategy,
 )  # :contentReference[oaicite:6]{index=6}
 
 # 4) Instanciamos FastAPIUsers

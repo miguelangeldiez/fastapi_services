@@ -14,7 +14,7 @@ from .schemas import (
     PaginatedPostsResponse, MessageResponse
 )
 
-router = APIRouter(prefix="/posts", tags=["posts"],dependencies=Depends(current_active_user))
+router = APIRouter(prefix="/posts", tags=["posts"],dependencies=[Depends(current_active_user)])
 
 
 @router.get(

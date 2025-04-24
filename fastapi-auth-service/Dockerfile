@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
 # Copia el código fuente
-COPY fastapi-auth-service/ .
+COPY . .
 
 # Expone el puerto para FastAPI
 EXPOSE 8000

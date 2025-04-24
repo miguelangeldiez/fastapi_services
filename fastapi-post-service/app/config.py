@@ -1,8 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import PostgresDsn
-import uuid
-from fastapi_users import BaseUserManager, UUIDIDMixin
-from app.db.post import User
 
 class Settings(BaseSettings):
     # Seguridad
