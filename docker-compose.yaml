@@ -47,6 +47,19 @@ services:
       - db
     volumes:
       - ./fastapi-profile-service:/app
+      
+  interaction-service:
+    build:
+      context: ./fastapi-interaction-service
+    env_file:
+      - .env
+    container_name: fastapi-interaction-service
+    ports:
+      - "8002:8000"
+    depends_on:
+      - db
+    volumes:
+      - ./fastapi-interaction-service:/app
 
 volumes:
   pgdata:
