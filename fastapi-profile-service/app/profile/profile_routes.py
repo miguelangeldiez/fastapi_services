@@ -7,17 +7,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .dependencies import get_db_session, current_active_user
 from ..db.models import User ,Post  
-from .schemas import UserRead, PostOut
+from .schemas import (
+    PostCreate,
+    PostOut,
+    CommentOut,
+    PaginatedPostsResponse,
+    MessageResponse,
+    UserRead,
+)
 
-T = TypeVar("T")
 
-class PaginatedResponse(Generic[T]):
-    total: int
-    pages: int
-    current_page: int
-    items: List[T]
-
-router = APIRouter(prefix="/user", tags=["user"])
+router = APIRouter(prefix="/user", tags=["user"],dependencies=[Depends(current_active_user)])
 
 @router.get(
     "/profile",
@@ -40,8 +40,8 @@ async def get_user_posts(
     user_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(current_active_user),
-    page: int = Query(1, ge=1),
-    per_page: int = Query(10, ge=1, le=100),
+    page: int = 1,
+    per_page: int = 10,
 ):
     """
     Sólo permite al usuario autenticado ver sus propios posts.
@@ -72,9 +72,12 @@ async def get_user_posts(
     result = await db.execute(stmt)
     posts = result.scalars().all()
 
-    return PaginatedResponse[PostOut](
-        total=total,
-        pages=pages,
-        current_page=page,
-        items=posts,
+    return PaginatedPostsResponse(
+        posts=posts,  # lista de PostOut
+        total=total,  # conteo total de registros
+        pages=ceil(total / per_page),  # total de páginas
+        current_page=page,  # página actual
+        per_page=per_page,  # elementos por página
+        has_next=(page * per_page) < total,  # hay siguiente?
+        has_prev=page > 1,  # hay anterior?
     )
