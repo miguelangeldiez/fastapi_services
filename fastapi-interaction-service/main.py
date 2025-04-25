@@ -7,7 +7,7 @@ from app.socket.events import register_socket_events
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import declarative_base
 from app.config import get_settings
-
+from app.interactions import comments,likes
 
 settings = get_settings()
 
@@ -33,6 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Socket.IO con su propia configuración CORS
-socket_manager = SocketManager(app=app, cors_allowed_origins="*")
-register_socket_events(socket_manager)
+app.include_router(comments.router,prefix="/posts,tags=["Comments"])
+app.include_router(likes.router,prefix="/posts,tags=["Likes"])
+app.include_router(websocket_router,tags=["WebScoket"])
+
