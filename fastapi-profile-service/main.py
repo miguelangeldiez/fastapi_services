@@ -4,8 +4,6 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.db.main_db import engine,Base
 
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
@@ -13,7 +11,7 @@ async def lifespan(app: FastAPI):
     yield
     await engine.dispose()
     
-app = FastAPI(title="Post Microservice",lifespan=lifespan)
+app = FastAPI(title="Profile Microservice",lifespan=lifespan)
 
 app.include_router(router)
 
