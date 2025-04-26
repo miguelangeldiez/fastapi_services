@@ -11,53 +11,16 @@ services:
 
   auth-service:
     build:
-      context: ./fastapi-auth-service
+      context: ./fastapi-services
     env_file:
       - .env
-    container_name: fastapi-auth-service
+    container_name: fastapi-services
     ports:
       - "8000:8000"
     depends_on:
       - db
     volumes:
-      - ./fastapi-auth-service:/app
+      - ./fastapi-services:/app
 
-  post-service:
-    build:
-      context: ./fastapi-post-service
-    env_file:
-      - .env
-    container_name: fastapi-post-service
-    ports:
-      - "8001:8000"
-    depends_on:
-      - db
-    volumes:
-      - ./fastapi-post-service:/app
-  
-  profile-service:
-    build:
-      context: ./fastapi-profile-service
-    env_file:
-      - .env
-    container_name: fastapi-profile-service
-    ports:
-      - "8002:8000"
-    depends_on:
-      - db
-    volumes:
-      - ./fastapi-profile-service:/app
-  interaction-service:
-    build:
-      context: ./fastapi-interaction-service
-    env_file:
-      - .env
-    container_name: fastapi-interaction-service
-    ports:
-      - "8003:8000"
-    depends_on:
-      - db
-    volumes:
-      - ./fastapi-interaction-service:/app
 volumes:
   pgdata:
