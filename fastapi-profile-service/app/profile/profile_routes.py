@@ -8,14 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .dependencies import get_db_session, current_active_user
 from ..db.models import User ,Post  
-from .schemas import (
-    PostCreate,
-    PostOut,
-    CommentOut,
-    PaginatedPostsResponse,
-    MessageResponse,
-    UserRead,
-)
+from .schemas import PaginatedPostsResponse,UserRead
+
 
 
 router = APIRouter(prefix="/user", tags=["user"],dependencies=[Depends(current_active_user)])
@@ -55,7 +49,7 @@ async def get_user_posts(
 
     # total de posts
     total_q = await db.execute(
-        select(func.count()).select_from(Post).where(Post.user_id == user_id)
+        select(func.count()).select_from(Post).where(Post.author_id== user_id)
     )
     total = total_q.scalar_one()
 
@@ -65,8 +59,8 @@ async def get_user_posts(
     # consulta paginada
     stmt = (
         select(Post)
-        .where(Post.user_id == user_id)
-        .order_by(Post.timestamp.desc())
+        .where(Post.author_id== user_id)
+        .order_by(Post.created_at.desc())
         .limit(per_page)
         .offset((page - 1) * per_page)
     )
