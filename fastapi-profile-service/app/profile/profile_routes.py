@@ -1,4 +1,5 @@
 # app/users/routes.py
+from math import ceil
 import uuid
 from typing import List, Generic, TypeVar
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -33,7 +34,7 @@ async def profile(user: User = Depends(current_active_user)):
 
 @router.get(
     "/{user_id}/posts",
-    response_model=PaginatedResponse[PostOut],
+    response_model=PaginatedPostsResponse,
     summary="Listar posts del usuario autenticado",
 )
 async def get_user_posts(
