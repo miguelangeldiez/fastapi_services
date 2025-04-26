@@ -1,7 +1,5 @@
-# routers/posts.py
 import uuid
 from math import ceil
-from typing import List
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
@@ -9,11 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException,status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .dependencies import get_db_session, current_active_user
-from ..db.models import Post, Comment, User
+from ..db.models import Post, User
 from .schemas import (
     PostCreate,
     PostOut,
-    CommentOut,
     PaginatedPostsResponse,
     MessageResponse,
 )
@@ -41,7 +38,7 @@ async def get_all_posts(
         select(Post)
         .options(
             selectinload(Post.comments),
-            selectinload(Post.author),
+            selectinload(Post.user),
         )
         .offset((page - 1) * per_page)
         .limit(per_page)
@@ -75,7 +72,7 @@ async def create_post(
         title=payload.title,
         content=payload.content,
         is_published=payload.is_published,
-        author_id=user.id,
+        user_id=user.id,
     )
     
     try:
@@ -109,18 +106,14 @@ async def delete_post(
     db: AsyncSession = Depends(get_db_session),
     user: User = Depends(current_active_user),
 ):
-    # 1) recuperar
     post = await db.get(Post, post_id)
-    if not post or post.author_id != user.id:
+    if not post or post.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Publicación no encontrada o no autorizada."
         )
-
     try:
-        # 2) eliminar
         await db.delete(post)
-        # 3) confirmar
         await db.commit()
     except Exception:
         await db.rollback()
@@ -130,52 +123,3 @@ async def delete_post(
         )
 
     return MessageResponse(msg="Publicación eliminada con éxito.", data=None)
-
-
-@router.get(
-    "/{post_id}/comments",
-    response_model=List[CommentOut],
-    summary="Listar comentarios de una publicación",
-)
-async def get_comments(
-    post_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db_session),
-):
-    # 1) Traer el post con sus comentarios
-    result = await db.execute(
-        select(Post)
-        .options(selectinload(Post.comments))
-        .where(Post.id == post_id)
-    )
-    post = result.scalar_one_or_none()
-    if not post:
-        raise HTTPException(status_code=404, detail="Publicación no encontrada.")
-    return post.comments
-
-
-@router.delete(
-    "/comments/{comment_id}",
-    response_model=MessageResponse[None],
-    summary="Eliminar un comentario por ID",
-)
-async def delete_comment(
-    comment_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db_session),
-    user: User = Depends(current_active_user),
-):
-    # 1) Recuperar el comentario
-    comment = await db.get(Comment, comment_id)
-    if not comment:
-        raise HTTPException(status_code=404, detail="Comentario no encontrado.")
-    if comment.user_id != user.id:
-        raise HTTPException(status_code=403, detail="No tienes permiso para eliminar este comentario.")
-
-    try:
-        # 2) Eliminar y confirmar
-        await db.delete(comment)
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise HTTPException(status_code=500, detail="Error al eliminar el comentario.")
-
-    return MessageResponse(msg="Comentario eliminado con éxito.", data=None)
