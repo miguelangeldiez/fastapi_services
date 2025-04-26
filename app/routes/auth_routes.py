@@ -6,7 +6,7 @@ from config import auth_backend,current_active_user
 
 
 auth_router = APIRouter(
-    prefix="/posts", tags=["posts"], dependencies=[Depends(current_active_user)]
+    prefix="/auth", tags=["Authentication"], dependencies=[Depends(current_active_user)]
 )
 # Login JWT
 auth_router.include_router(

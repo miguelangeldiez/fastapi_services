@@ -9,9 +9,9 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  auth-service:
+  fastapi-services:
     build:
-      context: ./fastapi-services
+      context: .
     env_file:
       - .env
     container_name: fastapi-services
@@ -20,7 +20,7 @@ services:
     depends_on:
       - db
     volumes:
-      - ./fastapi-services:/app
+      - .:/app
 
 volumes:
   pgdata:
