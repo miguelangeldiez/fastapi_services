@@ -4,8 +4,7 @@ uvicorn[standard]>=0.23.0
 # FastAPI Users + SQLAlchemy
 fastapi-users[sqlalchemy]>=12.2.1
 fastapi-users-db-sqlalchemy>=1.4.4
-pydantic-settings
-fastapi-socketio
+pydantic-settings>=1.0.0
 
 # ORM y migraciones
 SQLAlchemy>=2.0.0

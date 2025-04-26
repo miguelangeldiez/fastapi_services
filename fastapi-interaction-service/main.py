@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.db.main_db import lifespan
-from app.interactions import interactions_router
+from app.interactions.routes import interactions_router
     
 app = FastAPI(title="Interaction Microservice",lifespan=lifespan)
 

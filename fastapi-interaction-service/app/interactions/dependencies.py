@@ -12,10 +12,10 @@ from fastapi_users.authentication import (
 )
 import uuid
 
-from ...main import async_session
+from app.db.main_db import async_session
 from ..db.models import User
 from .schemas import UserManager
-from ..config import get_settings
+from config import get_settings
 
 settings = get_settings()
 
