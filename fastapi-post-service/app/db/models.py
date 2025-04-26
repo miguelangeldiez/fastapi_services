@@ -4,7 +4,7 @@ from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey,func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship,Mapped, mapped_column
 from fastapi_users_db_sqlalchemy import SQLAlchemyBaseUserTableUUID
-from app.db import Base
+from .main_db import Base
 
 class User(SQLAlchemyBaseUserTableUUID, Base):
     username: Mapped[str] = mapped_column(nullable=True, unique=True)

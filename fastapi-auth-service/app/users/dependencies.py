@@ -1,5 +1,3 @@
-# users/dependencies.py
-
 from typing import AsyncGenerator
 from fastapi import Depends
 from fastapi_users import FastAPIUsers
@@ -19,12 +17,14 @@ from config import get_settings
 
 settings = get_settings()
 
+
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """
     Crea y cierra correctamente la sesión de SQLAlchemy.
     """
     async with async_session() as session:
         yield session
+
 
 async def get_user_db(
     session: AsyncSession = Depends(get_db_session),
@@ -34,6 +34,7 @@ async def get_user_db(
     """
     yield SQLAlchemyUserDatabase(session, User)
 
+
 async def get_user_manager(
     user_db: SQLAlchemyUserDatabase = Depends(get_user_db),
 ) -> AsyncGenerator[UserManager, None]:
@@ -42,9 +43,13 @@ async def get_user_manager(
     """
     yield UserManager(user_db)
 
+
 # --- Configuración de autenticación JWT vía cookie ---
 def get_jwt_strategy() -> JWTStrategy:
-    return JWTStrategy(secret=settings.JWT_SECRET_KEY, lifetime_seconds=settings.JWT_LIFETIME_SECONDS)
+    return JWTStrategy(
+        secret=settings.JWT_SECRET_KEY, lifetime_seconds=settings.JWT_LIFETIME_SECONDS
+    )
+
 
 # 1) Definimos el transporte que usará cookies
 cookie_transport = CookieTransport(

@@ -22,5 +22,3 @@ passlib[bcrypt]>=1.7.4
 # Configuración y variables de entorno
 python-dotenv>=1.0.0
 
-# (Opcional) Tipos y mejoras IDE
-typing-extensions>=4.5.0

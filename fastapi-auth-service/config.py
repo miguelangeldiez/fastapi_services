@@ -14,7 +14,10 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
 
     # Configuración de carga desde `.env`
-    model_config = SettingsConfigDict(env_file=".env", extra="forbid")  # no permite variables no definidas
+    model_config = SettingsConfigDict(
+        env_file=".env", extra="forbid"
+    )  # no permite variables no definidas
+
 
 def get_settings() -> Settings:
     return Settings()
