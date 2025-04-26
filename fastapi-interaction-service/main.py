@@ -14,4 +14,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(interactions_router, prefix="/posts", tags=["Comments"])
+app.include_router(interactions_router, prefix="/posts", tags=["Interactions"])

@@ -16,7 +16,7 @@ from .schemas import (
 )
 
 interactions_router = APIRouter(
-    prefix="/posts", tags=["posts"], dependencies=[Depends(current_active_user)]
+    prefix="/posts", dependencies=[Depends(current_active_user)]
 )
 
 @interactions_router.websocket("/ws")
