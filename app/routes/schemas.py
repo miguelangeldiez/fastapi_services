@@ -16,7 +16,7 @@ class UserCreate(schemas.BaseUserCreate):
 
 
 class Token(BaseModel):
-    token: str
+    pass
 
 
 class UserManager(UUIDIDMixin, BaseUserManager[User, UUID]):
@@ -39,19 +39,24 @@ class PostOut(BaseModel):
     is_published: bool
     
     user_id: UUID       
-    timestamp: datetime
+    created_at: datetime
     updated_at: datetime
     class Config:
         from_attributes = True
         allow_population_by_field_name = True
 
+class CommentCreate(BaseModel):
+    content: str
+
+    class Config:
+        from_attributes = True
 
 class CommentOut(BaseModel):
     id: UUID
     content: str
     user_id: UUID
     post_id: UUID
-    timestamp: datetime
+    created_at: datetime
 
     class Config:
         from_attributes = True

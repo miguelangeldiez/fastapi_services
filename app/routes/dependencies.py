@@ -53,7 +53,8 @@ def get_jwt_strategy() -> JWTStrategy:
 # 1) Definimos el transporte que usará cookies
 cookie_transport = CookieTransport(
     cookie_name="threadfit_cookie",
-    cookie_max_age=3600,  # 1 hora
+    cookie_max_age=3600,  # 1 hora  cookie_secure=True,  # Solo se envía por HTTPS
+    #cookie_httponly=True  No accesible desde JavaScript
 )  # :contentReference[oaicite:4]{index=4}
 
 # 2) Backend de autenticación

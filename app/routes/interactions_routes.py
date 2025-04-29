@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .dependencies import get_db_session, current_active_user
 from app.db.models import Post, Comment, Like, User
 from .schemas import (
+    CommentCreate,
     CommentOut,
     MessageResponse,
 )
@@ -61,7 +62,7 @@ async def get_comments(
 )
 async def post_comment(
     post_id: uuid.UUID,
-    comment_data: str,
+    comment_data: CommentCreate,
     db: AsyncSession = Depends(get_db_session),
     user: User = Depends(current_active_user),
 ):
@@ -76,7 +77,7 @@ async def post_comment(
     # Crear el comentario
     new_comment = Comment(
         post_id=post_id,
-        user_id=user.id,
+        user_id=user.id,  
         content=comment_data.content,
     )
     db.add(new_comment)

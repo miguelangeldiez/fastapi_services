@@ -5,16 +5,9 @@ from app.routes.schemas import UserCreate, UserRead
 from .dependencies import auth_backend, current_active_user
 
 
-auth_router = APIRouter(
-    prefix="/auth", tags=["Authentication"], dependencies=[Depends(current_active_user)]
-)
+auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
 # Login JWT
-auth_router.include_router(
-    fastapi_users.get_auth_router(auth_backend), prefix="/auth/jwt"
-)
+auth_router.include_router(fastapi_users.get_auth_router(auth_backend))
 
 # Registro de usuarios
-auth_router.include_router(
-    fastapi_users.get_register_router(UserRead, UserCreate),
-    prefix="/auth",
-)
+auth_router.include_router(fastapi_users.get_register_router(UserRead, UserCreate))
