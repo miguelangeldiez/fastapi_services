@@ -7,7 +7,7 @@ from fastapi_users_db_sqlalchemy import SQLAlchemyBaseUserTableUUID
 from .main_db import Base
 
 class User(SQLAlchemyBaseUserTableUUID, Base):
-    username: Mapped[str] = mapped_column(nullable=True, unique=True)
+    pass
 
 
 class Post(Base):

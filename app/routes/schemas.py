@@ -1,28 +1,25 @@
 from datetime import datetime
 from typing import Generic, List, Optional, TypeVar
 from uuid import UUID
-import uuid
 from fastapi_users import BaseUserManager, UUIDIDMixin,schemas
 from pydantic import BaseModel
 from config import get_settings
 from app.db.models import User
-from pydantic import BaseModel
-from pydantic.generics import GenericModel
 
 T = TypeVar("T")
-class UserRead(schemas.BaseUser[uuid.UUID]):
-    username: str | None
+class UserRead(schemas.BaseUser[UUID]):
+    pass
 
 
 class UserCreate(schemas.BaseUserCreate):
-    username: str | None
+    pass
 
 
 class Token(BaseModel):
     token: str
 
 
-class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
+class UserManager(UUIDIDMixin, BaseUserManager[User, UUID]):
     reset_password_token_secret = get_settings().JWT_SECRET_KEY
     verification_token_secret = get_settings().JWT_SECRET_KEY
 
@@ -70,10 +67,10 @@ class PaginatedPostsResponse(BaseModel):
     has_prev: bool
 
 
-class MessageResponse(GenericModel, Generic[T]):
+class MessageResponse(BaseModel, Generic[T]):
     msg: str
     data: Optional[T] = None
 
-class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
+class UserManager(UUIDIDMixin, BaseUserManager[User, UUID]):
     reset_password_token_secret = get_settings().JWT_SECRET_KEY
     verification_token_secret = get_settings().JWT_SECRET_KEY

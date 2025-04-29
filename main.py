@@ -1,11 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import posts_router, interactions_router, auth_router, profile_router
+from app.routes.interactions_routes import interactions_router
+from app.routes.posts_routes import posts_router
+from app.routes.profile_routes import profile_router
+from app.routes.auth_routes import auth_router
 
 # Inicialización de la aplicación FastAPI
 app = FastAPI(
     title="ThreadFit",
-    description="Microservicio para gestionar publicaciones, interacciones, autenticación y perfiles.",
+    description="Servicios para gestionar publicaciones, interacciones, autenticación y perfiles.",
     version="1.0.0",
 )
 
@@ -19,12 +22,7 @@ app.add_middleware(
 )
 
 # Registro de routers
-app.include_router(posts_router)
 app.include_router(auth_router)
-app.include_router(interactions_router)
 app.include_router(profile_router)
-
-# Punto de inicio
-@app.get("/", tags=["Root"])
-async def root():
-    return {"message": "Bienvenido a ThreadFit API"}
+app.include_router(posts_router)
+app.include_router(interactions_router)
