@@ -12,7 +12,7 @@ class UserRead(schemas.BaseUser[UUID]):
 
 
 class UserCreate(schemas.BaseUserCreate):
-    pass
+    batch_id: Optional[UUID] = None  # Incluir el campo batch_id
 
 
 class Token(BaseModel):

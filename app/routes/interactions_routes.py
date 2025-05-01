@@ -2,8 +2,6 @@ import uuid
 from typing import List
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from fastapi import  WebSocket, WebSocketDisconnect
-from app.socket.manage import manager, notify_new_comment, notify_new_like
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,19 +18,6 @@ interactions_router = APIRouter(
     prefix="/interactions",tags=["Likes & Comments"], dependencies=[Depends(current_active_user)]
 )
 
-@interactions_router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """
-    Endpoint para manejar conexiones WebSocket.
-    """
-    await manager.connect(websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            print(f"Mensaje recibido: {data}")
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-        print("Cliente desconectado")
 
 @interactions_router.get(
     "/{post_id}/comments",
@@ -89,7 +74,6 @@ async def post_comment(
         raise HTTPException(
             status_code=500, detail=f"Error al publicar el comentario: {e}"
         )
-    await notify_new_comment(post_id=str(post_id), comment_id=str(new_comment.id), user_id=str(user.id))
     return MessageResponse(
         msg="Comentario publicado con éxito.",
         data=new_comment,
@@ -132,7 +116,6 @@ async def like_post(
         raise HTTPException(
             status_code=500, detail=f"Error al dar like a la publicación: {e}"
         )
-    await notify_new_like(post_id=str(post_id), user_id=str(user.id))
     return MessageResponse(msg="Like agregado con éxito.", data=None)
 
 @interactions_router.delete(

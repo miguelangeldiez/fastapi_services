@@ -6,7 +6,6 @@ fastapi-users[sqlalchemy]>=12.2.1
 fastapi-users-db-sqlalchemy>=1.4.4
 pydantic-settings
 
-
 # ORM y migraciones
 SQLAlchemy>=2.0.0
 alembic>=1.10.0
@@ -21,4 +20,21 @@ passlib[bcrypt]>=1.7.4
 
 # Configuración y variables de entorno
 python-dotenv>=1.0.0
+debugpy>=1.0.0
 
+# Generación de datos sintéticos
+faker>=18.9.0
+
+# Cliente HTTP asíncrono
+httpx>=0.24.0
+
+# Manejo de formularios y archivos
+python-multipart>=0.0.6
+
+# Generación de PDFs
+reportlab>=3.6.0
+
+# Opcionales para pruebas y WebSockets
+pytest>=7.0.0
+pytest-asyncio>=0.20.0
+websockets>=11.0.0
