@@ -1,11 +1,12 @@
-# app/users/routes.py
+
 from math import ceil
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .dependencies import get_db_session, current_active_user
+from app.db.main_db import get_db_session
+from app.routes.auth_routes import current_active_user
 from app.db.models import User ,Post  
 from .schemas import PaginatedPostsResponse,UserRead
 

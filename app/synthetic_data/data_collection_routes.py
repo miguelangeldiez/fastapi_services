@@ -12,9 +12,9 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 )
-
-from app.db.models import User, Post, Comment
-from app.routes.dependencies import get_db_session, current_active_user
+from app.db.models import Batch, User, Post, Comment
+from app.db.main_db import get_db_session
+from app.routes.auth_routes import current_active_user
 from app.synthetic_data.generation_routes import get_token_from_cookie
 
 data_router = APIRouter(prefix="/data", tags=["Data Collection"])
@@ -23,11 +23,12 @@ data_router = APIRouter(prefix="/data", tags=["Data Collection"])
 # Ruta para obtener usuarios generados por el usuario autenticado
 @data_router.get("/users", summary="Obtener usuarios generados")
 async def get_users(
-    batch_id : UUID = Query(..., description="Identificador del lote"),
+    batch_id: UUID = Query(..., description="Identificador del lote"),
     format: str = Query("json", enum=["json", "csv", "pdf"]),
     session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(current_active_user),  
+    current_user: User = Depends(current_active_user),
 ):
+    # Consultar usuarios generados asociados al batch_id
     query = await session.execute(
         select(User).where(User.batch_id == batch_id)
     )
@@ -35,7 +36,7 @@ async def get_users(
 
     if format == "csv":
         output = StringIO()
-        writer = csv.DictWriter(output, fieldnames=["id", "email", "is_active", "is_superuser", "is_verified", "batch_id"])
+        writer = csv.DictWriter(output, fieldnames=["id", "email", "is_active", "is_superuser", "is_verified"])
         writer.writeheader()
         for user in users:
             writer.writerow({
@@ -44,7 +45,6 @@ async def get_users(
                 "is_active": user.is_active,
                 "is_superuser": user.is_superuser,
                 "is_verified": user.is_verified,
-                "batch_id": user.batch_id,
             })
         output.seek(0)
         return StreamingResponse(output, media_type="text/csv", headers={
@@ -289,7 +289,7 @@ async def get_batches(
 ):
     # Consultar los batch_id únicos asociados al usuario
     query = await session.execute(
-        select(User.batch_id).where(User.id == current_user.id).distinct()
+        select(Batch.batch_id).where(User.id == current_user.id).distinct()
     )
     user_batches = query.scalars().all()
 

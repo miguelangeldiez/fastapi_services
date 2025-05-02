@@ -3,14 +3,13 @@ from pydantic import BaseModel
 from faker import Faker
 import httpx
 import asyncio
-import random
 import uuid
 
 from app.synthetic_data.schemas import CommentRequest, PostRequest, UserRequest
-from app.routes.dependencies import current_active_user
+from app.routes.auth_routes import current_active_user
 from app.db.models import Batch, User
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.routes.dependencies import get_db_session
+from app.db.main_db import get_db_session
 
 fake = Faker()
 synthetic_router = APIRouter(prefix="/synthetic", tags=["Synthetic Data Generation"])

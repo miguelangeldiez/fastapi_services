@@ -1,27 +1,32 @@
 from datetime import datetime
 from typing import Generic, List, Optional, TypeVar
 from uuid import UUID
-from fastapi_users import BaseUserManager, UUIDIDMixin,schemas
+from fastapi import Request
+from fastapi_users import BaseUserManager, UUIDIDMixin, schemas
 from pydantic import BaseModel
-from config import get_settings
 from app.db.models import User
+from config import get_settings
 
 T = TypeVar("T")
+
+
 class UserRead(schemas.BaseUser[UUID]):
     pass
 
 
 class UserCreate(schemas.BaseUserCreate):
-    batch_id: Optional[UUID] = None  # Incluir el campo batch_id
+    batch_id: Optional[UUID] = None  # Permitir que se pase batch_id opcionalmente
 
 
 class Token(BaseModel):
     pass
 
 
-class UserManager(UUIDIDMixin, BaseUserManager[User, UUID]):
+class UserManager(UUIDIDMixin, BaseUserManager["User", UUID]):  # Usa una referencia de cadena para evitar el ciclo
     reset_password_token_secret = get_settings().JWT_SECRET_KEY
     verification_token_secret = get_settings().JWT_SECRET_KEY
+
+   
 
 
 class PostCreate(BaseModel):
@@ -75,7 +80,3 @@ class PaginatedPostsResponse(BaseModel):
 class MessageResponse(BaseModel, Generic[T]):
     msg: str
     data: Optional[T] = None
-
-class UserManager(UUIDIDMixin, BaseUserManager[User, UUID]):
-    reset_password_token_secret = get_settings().JWT_SECRET_KEY
-    verification_token_secret = get_settings().JWT_SECRET_KEY
