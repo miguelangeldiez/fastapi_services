@@ -6,6 +6,7 @@ from app.routes.profile_routes import profile_router
 from app.routes.auth_routes import auth_router
 from app.synthetic_data.generation_routes import synthetic_router
 from app.synthetic_data.data_collection_routes import data_router
+from app.real_time.websockets_routes import websocket_router  
 import debugpy
 
 debugpy.listen(("0.0.0.0", 5678))
@@ -34,3 +35,4 @@ app.include_router(posts_router)
 app.include_router(interactions_router)
 app.include_router(synthetic_router)
 app.include_router(data_router)
+app.include_router(websocket_router)

@@ -10,6 +10,7 @@ from app.routes.auth_routes import current_active_user
 from app.db.models import Batch, User
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.main_db import get_db_session
+from app.real_time.websockets_routes import broadcast_message
 
 fake = Faker()
 synthetic_router = APIRouter(prefix="/synthetic", tags=["Synthetic Data Generation"])
@@ -43,6 +44,8 @@ async def generate_users(
     db.add(new_batch)
     await db.commit()
 
+    generated_users = []  # Almacenar los usuarios generados para el modo pull
+
     async with httpx.AsyncClient() as client:
         for _ in range(request.num_users):
             user_data = {
@@ -60,7 +63,14 @@ async def generate_users(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Error al registrar usuario: {user_response.text}",
                 )
+            generated_users.append(user_data)  # Agregar al modo pull
+            if request.mode == "push":
+                # Notificar al cliente sobre el nuevo usuario generado
+                await broadcast_message(f"Nuevo usuario generado: {user_data['email']}")
             await asyncio.sleep(1.0 / request.speed_multiplier)
+
+    if request.mode == "pull":
+        return {"msg": f"{request.num_users} usuarios registrados con éxito.", "batch_id": batch_id, "data": generated_users}
     return {"msg": f"{request.num_users} usuarios registrados con éxito.", "batch_id": batch_id}
 
 
@@ -79,6 +89,8 @@ async def generate_posts(
     db.add(new_batch)
     await db.commit()
     await db.refresh(new_batch)  # Refrescar para obtener el ID generado
+
+    generated_posts = []  # Almacenar las publicaciones generadas para el modo pull
 
     async with httpx.AsyncClient() as client:
         for _ in range(request.num_posts):
@@ -99,7 +111,14 @@ async def generate_posts(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Error al crear publicación: {post_response.text}",
                 )
+            generated_posts.append(post_data)  # Agregar al modo pull
+            if request.mode == "push":
+                # Notificar al cliente sobre la nueva publicación generada
+                await broadcast_message(f"Nueva publicación generada: {post_data['title']}")
             await asyncio.sleep(1.0 / request.speed_multiplier)
+
+    if request.mode == "pull":
+        return {"msg": f"{request.num_posts} publicaciones registradas con éxito.", "batch_id": str(new_batch.id), "data": generated_posts}
     return {"msg": f"{request.num_posts} publicaciones registradas con éxito.", "batch_id": str(new_batch.id)}
 
 
@@ -119,6 +138,8 @@ async def generate_comments(
     await db.commit()
     await db.refresh(new_batch)  # Refrescar para obtener el ID generado
 
+    generated_comments = []  # Almacenar los comentarios generados para el modo pull
+
     async with httpx.AsyncClient() as client:
         for _ in range(request.num_comments):
             comment_data = {
@@ -136,5 +157,12 @@ async def generate_comments(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Error al agregar comentario: {comment_response.text}",
                 )
+            generated_comments.append(comment_data)  # Agregar al modo pull
+            if request.mode == "push":
+                # Notificar al cliente sobre el nuevo comentario generado
+                await broadcast_message(f"Nuevo comentario generado: {comment_data['content']}")
             await asyncio.sleep(1.0 / request.speed_multiplier)
+
+    if request.mode == "pull":
+        return {"msg": f"{request.num_comments} comentarios registrados con éxito.", "batch_id": str(new_batch.id), "data": generated_comments}
     return {"msg": f"{request.num_comments} comentarios registrados con éxito.", "batch_id": str(new_batch.id)}
