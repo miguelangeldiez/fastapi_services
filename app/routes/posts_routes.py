@@ -17,7 +17,7 @@ from .schemas import (
 )
 
 posts_router = APIRouter(
-    prefix="/posts", tags=["Posts Settings"], dependencies=[Depends(current_active_user)]
+    prefix="/posts", tags=["Posts Settings"]
 )
 
 
@@ -63,6 +63,7 @@ async def get_all_posts(
     response_model=MessageResponse[PostOut],
     status_code=status.HTTP_201_CREATED,
     summary="Crear una nueva publicación",
+    dependencies=[Depends(current_active_user)],
 )
 async def create_post(
     payload: PostCreate,
@@ -101,6 +102,7 @@ async def create_post(
     response_model=MessageResponse[None],
     status_code=status.HTTP_200_OK,
     summary="Eliminar una publicación",
+    dependencies=[Depends(current_active_user)],
 )
 async def delete_post(
     post_id: uuid.UUID,

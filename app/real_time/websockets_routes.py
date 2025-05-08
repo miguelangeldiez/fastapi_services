@@ -34,6 +34,8 @@ async def broadcast_to_user(user_id: str, message: str):
 async def websocket_endpoint(websocket: WebSocket):
     await connect_client(websocket)
     try:
+        # Enviar un mensaje inicial al cliente
+        await websocket.send_text("Bienvenido al servidor de notificaciones")
         while True:
             # Escucha mensajes del cliente (si es necesario)
             data = await websocket.receive_text()

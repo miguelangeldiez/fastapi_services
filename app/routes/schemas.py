@@ -1,9 +1,8 @@
 from datetime import datetime
 from typing import Generic, List, Optional, TypeVar
 from uuid import UUID
-from fastapi import Request
 from fastapi_users import BaseUserManager, UUIDIDMixin, schemas
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from app.db.models import User
 from config import get_settings
 
@@ -16,6 +15,10 @@ class UserRead(schemas.BaseUser[UUID]):
 
 class UserCreate(schemas.BaseUserCreate):
     batch_id: Optional[UUID] = None  # Permitir que se pase batch_id opcionalmente
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,   # so that if you ever alias fields, Pydantic will let you use the name
+    )
 
 
 class Token(BaseModel):
@@ -34,27 +37,25 @@ class PostCreate(BaseModel):
     content: str
     is_published: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PostOut(BaseModel):
     id: UUID
+    title: str
     content: str
     is_published: bool
     
     user_id: UUID       
     created_at: datetime
     updated_at: datetime
-    class Config:
-        from_attributes = True
-        allow_population_by_field_name = True
+    model_config = ConfigDict(from_attributes=True,allow_population_by_field_name = True)
+        
 
 class CommentCreate(BaseModel):
     content: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CommentOut(BaseModel):
     id: UUID
@@ -63,8 +64,7 @@ class CommentOut(BaseModel):
     post_id: UUID
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PaginatedPostsResponse(BaseModel):

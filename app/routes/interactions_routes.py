@@ -17,7 +17,7 @@ from .schemas import (
 )
 
 interactions_router = APIRouter(
-    prefix="/interactions",tags=["Likes & Comments"], dependencies=[Depends(current_active_user)]
+    prefix="/interactions",tags=["Likes & Comments"]
 )
 
 
@@ -46,6 +46,7 @@ async def get_comments(
     response_model=MessageResponse[CommentOut],
     status_code=status.HTTP_201_CREATED,
     summary="Publicar un comentario en una publicación",
+    dependencies=[Depends(current_active_user)]
 )
 async def post_comment(
     post_id: uuid.UUID,
@@ -86,6 +87,7 @@ async def post_comment(
     "/{post_id}/like",
     response_model=MessageResponse[None],
     summary="Dar like a una publicación",
+    dependencies=[Depends(current_active_user)]
 )
 async def like_post(
     post_id: uuid.UUID,
@@ -125,6 +127,7 @@ async def like_post(
     "/{post_id}/like",
     response_model=MessageResponse[None],
     summary="Quitar like de una publicación",
+    dependencies=[Depends(current_active_user)]
 )
 async def unlike_post(
     post_id: uuid.UUID,
@@ -161,6 +164,7 @@ async def unlike_post(
     response_model=MessageResponse[None],
     status_code=status.HTTP_200_OK,
     summary="Eliminar un comentario por ID",
+    dependencies=[Depends(current_active_user)]
 )
 async def delete_comment(
     comment_id: uuid.UUID,

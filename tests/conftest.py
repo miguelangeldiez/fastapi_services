@@ -1,9 +1,11 @@
-# filepath: tests/conftest.py
 import pytest
-from httpx import AsyncClient
-from main import app
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.db.main_db import get_db_session, Base, engine
 
-@pytest.fixture
-async def client():
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        yield client
+@pytest.fixture(scope="function", autouse=True)
+async def clean_database():
+    async with engine.begin() as conn:
+        # Elimina y recrea todas las tablas
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+    yield
