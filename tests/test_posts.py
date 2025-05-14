@@ -5,7 +5,9 @@ import pytest
 from httpx import AsyncClient
 import os
 
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "")
+from config import get_settings
+
+settings = get_settings()
 PASSWORD = "securepassword123"
 
 # Example for test_create_post
@@ -13,7 +15,7 @@ PASSWORD = "securepassword123"
 async def test_create_post():
     email = f"poster_{uuid.uuid4().hex}@example.com"
 
-    async with AsyncClient(base_url=allowed_origins) as client:
+    async with AsyncClient(base_url=settings.ALLOWED_ORIGINS, verify=False) as client:
         # Registro + login
         reg = await client.post(
             "/auth/register",
@@ -45,7 +47,7 @@ async def test_create_post():
 async def test_list_posts():
     email = f"poster2_{uuid.uuid4().hex}@example.com"
 
-    async with AsyncClient(base_url=allowed_origins) as client:
+    async with AsyncClient(base_url=settings.ALLOWED_ORIGINS, verify=False) as client:
         # Registro + login
         reg = await client.post(
             "/auth/register",

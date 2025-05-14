@@ -5,17 +5,20 @@ import pytest
 from httpx import AsyncClient
 import os
 
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "")
+from config import get_settings
+
+settings = get_settings()
 PASSWORD = "securepassword123"
+
+# Verificar que la variable de entorno ALLOWED_ORIGINS esté configurada correctamente
 
 @pytest.mark.asyncio
 async def test_register_user():
     email = f"testregister_{uuid.uuid4().hex}@example.com"
-    async with AsyncClient(base_url=allowed_origins) as client:
+    async with AsyncClient(base_url=settings.ALLOWED_ORIGINS, verify=False) as client:
         payload = {
             "email": email,
             "password": PASSWORD,
-            "batch_id": None
         }
         response = await client.post("/auth/register", json=payload)
     assert response.status_code == 201, response.text
@@ -26,11 +29,11 @@ async def test_register_user():
 @pytest.mark.asyncio
 async def test_login_user():
     email = f"testlogin_{uuid.uuid4().hex}@example.com"
-    async with AsyncClient(base_url=allowed_origins) as client:
+    async with AsyncClient(base_url=settings.ALLOWED_ORIGINS, verify=False) as client:
         # 1) Registro
         reg = await client.post(
             "/auth/register",
-            json={"email": email, "password": PASSWORD, "batch_id": None},
+            json={"email": email, "password": PASSWORD },
         )
         assert reg.status_code == 201, f"Registro falló: {reg.text}"
 

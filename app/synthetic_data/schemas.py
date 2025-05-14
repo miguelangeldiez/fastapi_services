@@ -31,7 +31,7 @@ class Action(str, Enum):
     generate_posts = "generate_posts"
     generate_comments = "generate_comments"
 
-class WSRequest(BaseModel):
-    action: Action
+class WSMessage(BaseModel):
+    action: str
     payload: Dict[str, Any] = Field(default_factory=dict)
-    speed_multiplier: confloat = Field(1.0, gt=0, le=100)  # evita división por 0
+    speed_multiplier: float = Field(1.0, ge=0.1, le=20)  # evita valores extremos

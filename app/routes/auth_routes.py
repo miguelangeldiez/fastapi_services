@@ -1,19 +1,14 @@
-from fastapi import APIRouter, Depends
-from app.db.main_db import get_db_session   
+from fastapi import APIRouter 
 from app.routes.dependencies import get_user_manager
 from app.routes.schemas import UserCreate, UserRead
-from typing import AsyncGenerator
 from fastapi_users import FastAPIUsers
-from fastapi_users.db import SQLAlchemyUserDatabase
 from fastapi_users.authentication import (
     CookieTransport,
     AuthenticationBackend,
     JWTStrategy,
 )
 import uuid
-from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import User
-from .schemas import UserManager
 from config import get_settings
 
 # Initialize settings
@@ -29,8 +24,8 @@ def get_jwt_strategy() -> JWTStrategy:
 
 # 1) Definimos el transporte que usará cookies
 cookie_transport = CookieTransport(
-    cookie_name="threadfit_cookie",
-    cookie_max_age=3600,
+    cookie_name=settings.COOKIE_NAME,
+    cookie_max_age=settings.JWT_LIFETIME_SECONDS,
     cookie_secure=True,  
     cookie_httponly=True  
 )  # :contentReference[oaicite:4]{index=4}

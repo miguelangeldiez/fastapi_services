@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
+    COOKIE_NAME: str
+    
 
     # Configuración de carga desde `.env`
     model_config = ConfigDict(

@@ -13,7 +13,11 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
         back_populates="user",
         foreign_keys="Batch.user_id"  # Especifica la clave foránea
     )
-    batch_id = Column(UUID(as_uuid=True), ForeignKey("batches.id"), nullable=True)
+    batch_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("batches.id", use_alter=True, name="fk_users_batch_id"),
+        nullable=True,
+    )
     batch = relationship(
         "Batch",
         backref="generated_users",

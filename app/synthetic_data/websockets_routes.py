@@ -1,164 +1,158 @@
-"""WebSocket endpoints de generación de datos en tiempo real (push).
-
-Este módulo expone un único endpoint `/ws/generate` que replica las
-funciones de `generation_routes.py`, pero enviando actualizaciones
-(push) al cliente conforme se van creando los registros.  Cada mensaje
-que recibe el servidor debe cumplir el esquema `WSRequest`:
-
-{
-    "action": "generate_users" | "generate_posts" | "generate_comments",
-    "payload": { ... },              # parámetros de la generación
-    "speed_multiplier": 1.0          # opcional, ralentiza/acelera
-}
-
-La respuesta se envía en tiempo real con eventos JSON de tipo
-`progress`, `completed` o `error`.
-"""
-
 from __future__ import annotations
 
-import asyncio
 import logging
-from typing import Any, Awaitable, Callable, Dict
+from typing import Any, Awaitable, Callable, Dict, Final
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, status
+from fastapi.websockets import WebSocketState
+from jose import JWTError, jwt  # usa **una** sola librería
+from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-# --- Dependencias de la app ---------------------------------------------------
-from app.routes.auth_routes import current_active_user # Devuelve `User | None`
+from app.db.main_db import get_db_session
 from app.db.models import User
-from app.synthetic_data.schemas import WSRequest
 from app.synthetic_data import generation_routes
+from app.synthetic_data.schemas import WSMessage
+from config import get_settings
 
+# ──────────────────────────────────────────────
+# Configuración global
+# ──────────────────────────────────────────────
 logger = logging.getLogger(__name__)
+settings = get_settings()
+
+MAX_WS_PER_USER: Final[int] = 5
+JWT_ALG: Final[str] = "HS256"
 
 websocket_router = APIRouter(prefix="/ws", tags=["websockets-generation"])
 
-
-# -----------------------------------------------------------------------------
-# Gestor de conexiones (reutilizable en otros módulos)
-# -----------------------------------------------------------------------------
+# ──────────────────────────────────────────────
+# Conexiones
+# ──────────────────────────────────────────────
 class ConnectionManager:
     def __init__(self) -> None:
-        self.active_connections: Dict[UUID, int] = {}
+        self._active: Dict[UUID, int] = {}
 
-    async def connect(self, websocket: WebSocket, user_id: UUID) -> None:
-        if self.active_connections.get(user_id, 0) >= 5:  # Máximo 5 conexiones por usuario
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+    async def connect(self, ws: WebSocket, user_id: UUID) -> None:
+        if self._active.get(user_id, 0) >= MAX_WS_PER_USER:
+            await ws.close(code=status.WS_1008_POLICY_VIOLATION)
             return
-        await websocket.accept()
-        self.active_connections[user_id] = self.active_connections.get(user_id, 0) + 1
+        await ws.accept()
+        self._active[user_id] = self._active.get(user_id, 0) + 1
 
-    def disconnect(self, websocket: WebSocket, user_id: UUID) -> None:
-        if user_id in self.active_connections:
-            self.active_connections[user_id] -= 1
-            if self.active_connections[user_id] == 0:
-                del self.active_connections[user_id]
+    def disconnect(self, user_id: UUID) -> None:
+        if user_id in self._active:
+            self._active[user_id] -= 1
+            if self._active[user_id] == 0:
+                self._active.pop(user_id, None)
 
 
 manager = ConnectionManager()
 
-# Tipo para el mapeo de acciones → función de generación
+# ──────────────────────────────────────────────
+# Mapeo acción → función generadora
+# ──────────────────────────────────────────────
 ActionHandler = Callable[[Dict[str, Any], float], Awaitable[int]]
-
-# -----------------------------------------------------------------------------
-# Mapeo de acciones a funciones de servicio (¡añade aquí las futuras acciones!)
-# -----------------------------------------------------------------------------
 ACTION_MAP: Dict[str, ActionHandler] = {
     "generate_users": generation_routes.generate_users,
     "generate_posts": generation_routes.generate_posts,
     "generate_comments": generation_routes.generate_comments,
 }
 
-
-# -----------------------------------------------------------------------------
-# Endpoint principal
-# -----------------------------------------------------------------------------
+# ──────────────────────────────────────────────
+# WebSocket endpoint
+# ──────────────────────────────────────────────
 @websocket_router.websocket("/generate")
 async def websocket_generate(
-    websocket: WebSocket,
-    current_user: User | None = Depends(current_active_user),  # Cookie `threadfit_cookie`
+    ws: WebSocket,
+    db: AsyncSession = Depends(get_db_session),
 ) -> None:
-    """Gestiona las peticiones de generación enviadas por WebSocket.
-
-    Si el usuario no está autenticado, cerramos la conexión con código
-    1008 (POLICY_VIOLATION).  El cliente debe refrescar su JWT o
-    autenticarse por HTTP antes de intentar la conexión.
-    """
-
-    if current_user is None:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-
-    await manager.connect(websocket, current_user.id)
-
     try:
+        user = await _authenticate_ws(ws, db)
+        await manager.connect(ws, user.id)
+
         while True:
-            # Esperamos petición del cliente
-            data = await websocket.receive_json()
             try:
-                req = WSRequest(**data)
-            except Exception as exc:  # noqa: BLE001
-                await websocket.send_json(
-                    {"type": "error", "detail": f"Solicitud inválida: {exc}"}
+                raw = await ws.receive_json()
+                msg = WSMessage(**raw)  # valida
+            except (ValidationError, ValueError) as ve:
+                await ws.send_json({"type": "error", "detail": str(ve)})
+                continue
+
+            handler = ACTION_MAP.get(msg.action)
+            if not handler:
+                await ws.send_json(
+                    {"type": "error", "detail": f"Acción desconocida: {msg.action}"}
                 )
                 continue
 
-            handler = ACTION_MAP.get(req.action)
-            if handler is None:
-                await websocket.send_json(
-                    {"type": "error", "detail": f"Acción '{req.action}' no soportada"}
-                )
-                continue
-
-            # Lanzamos la generación en segundo plano para no bloquear el loop WS
-            asyncio.create_task(
-                _run_generation(
-                    websocket=websocket,
-                    handler=handler,
-                    payload=req.payload,
-                    speed_multiplier=req.speed_multiplier,
-                    action=req.action,
-                )
-            )
-
+            await _run_generation(ws, handler, msg)
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        logger.info("WebSocket desconectado")
+    except Exception:
+        logger.exception("Error inesperado en WebSocket", exc_info=True)
+        if ws.application_state != WebSocketState.DISCONNECTED:
+            await ws.close(code=status.WS_1011_INTERNAL_ERROR)
+    finally:
+        manager.disconnect(user.id)
 
 
-# -----------------------------------------------------------------------------
+# ──────────────────────────────────────────────
 # Helpers
-# -----------------------------------------------------------------------------
+# ──────────────────────────────────────────────
 async def _run_generation(
-    *,
-    websocket: WebSocket,
+    ws: WebSocket,
     handler: ActionHandler,
-    payload: Dict[str, Any],
-    speed_multiplier: float,
-    action: str,
+    msg: WSMessage,
 ) -> None:
-    """Ejecuta la función de generación y envía progreso en tiempo real."""
+    total = 0
     try:
-        total_created = 0
-
-        # Las funciones de `generation_service` deben ser *async generators*
-        # que vayan `yield`‑ando cada elemento creado.
-        async for item in handler(payload, speed_multiplier):
-            total_created += 1
-            await websocket.send_json(
+        async for item in handler(msg.payload, msg.speed_multiplier):
+            total += 1
+            if ws.application_state == WebSocketState.DISCONNECTED:
+                break
+            await ws.send_json(
                 {
                     "type": "progress",
-                    "action": action,
+                    "action": msg.action,
                     "payload": item,
-                    "count": total_created,
+                    "count": total,
                 }
             )
+        if ws.application_state != WebSocketState.DISCONNECTED:
+            await ws.send_json(
+                {"type": "completed", "action": msg.action, "total": total}
+            )
+    except Exception as exc:
+        logger.exception("Error durante la generación '%s'", msg.action, exc_info=True)
+        if ws.application_state != WebSocketState.DISCONNECTED:
+            await ws.send_json(
+                {"type": "error", "detail": str(exc), "action": msg.action}
+            )
 
-        await websocket.send_json(
-            {"type": "completed", "action": action, "total": total_created}
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("Error durante la generación '%s'", action)
-        await websocket.send_json(
-            {"type": "error", "detail": str(exc), "action": action}
-        )
+
+async def _authenticate_ws(ws: WebSocket, db: AsyncSession) -> User:
+    token = ws.cookies.get("access_token")
+    if not token:
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+        raise WebSocketDisconnect()
+
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[JWT_ALG])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise JWTError("missing sub")
+    except JWTError:
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+        raise WebSocketDisconnect()
+
+    user = (
+        (await db.execute(select(User).where(User.id == user_id)))
+        .scalar_one_or_none()
+    )
+    if not user:
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+        raise WebSocketDisconnect()
+    return user

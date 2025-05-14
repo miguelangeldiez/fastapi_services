@@ -1,3 +1,14 @@
+import debugpy
+
+try:
+    if not debugpy.is_client_connected():
+        debugpy.listen(("0.0.0.0", 5678))
+        print("Esperando debugger...")
+except RuntimeError as e:
+    print(f"Debugpy ya está escuchando o no se puede iniciar: {e}")
+
+
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes.interactions_routes import interactions_router
@@ -7,10 +18,6 @@ from app.routes.auth_routes import auth_router
 from app.synthetic_data.generation_routes import synthetic_router
 from app.synthetic_data.data_collection_routes import data_router 
 from app.synthetic_data.websockets_routes import websocket_router
-import debugpy
-
-debugpy.listen(("0.0.0.0", 5678))
-print("Esperando debugger...")
 
 # Inicialización de la aplicación FastAPI
 app = FastAPI(
@@ -22,7 +29,7 @@ app = FastAPI(
 # Middleware CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Cambiar a dominios específicos en producción
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

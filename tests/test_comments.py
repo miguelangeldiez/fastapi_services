@@ -5,14 +5,16 @@ import pytest
 from httpx import AsyncClient
 import os
 
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "")
+from config import get_settings
+
+settings = get_settings()
 PASSWORD = "securepassword123"
 
 @pytest.mark.asyncio
 async def test_create_and_list_comments():
     email = f"commenter_{uuid.uuid4().hex}@example.com"
 
-    async with AsyncClient(base_url=allowed_origins) as client:
+    async with AsyncClient(base_url=settings.ALLOWED_ORIGINS, verify=False) as client:
         # Registro + login
         reg = await client.post(
             "/auth/register",
