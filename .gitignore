@@ -1,2 +1,8 @@
 # TLS de desarrollo
 /certs/
+.env
+__pycache__/
+.vscode/
+alembic.ini
+/alembic/
+pytest.ini
