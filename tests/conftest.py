@@ -1,6 +1,5 @@
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.main_db import get_db_session, Base, engine
+from app.db.main_db import Base, engine
 
 @pytest.fixture(scope="function", autouse=True)
 async def clean_database():

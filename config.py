@@ -1,11 +1,12 @@
 from pydantic_settings import BaseSettings
-from pydantic import PostgresDsn
+from pydantic import ConfigDict, PostgresDsn
 
 
 class Settings(BaseSettings):
     # Seguridad
     JWT_SECRET_KEY: str
     JWT_LIFETIME_SECONDS: int
+    ALLOWED_ORIGINS: str
 
     # Base de datos
     DATABASE_URL: PostgresDsn  
@@ -14,11 +15,11 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
 
     # Configuración de carga desde `.env`
-    class Config:
-        env_file = ".env"
-        extra = "forbid"
-        validate_by_name = True
-
+    model_config = ConfigDict(
+        env_file=".env",
+        extra="forbid",
+        validate_by_name=True,
+    )
 
 def get_settings() -> Settings:
     return Settings()

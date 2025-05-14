@@ -49,7 +49,7 @@ class PostOut(BaseModel):
     user_id: UUID       
     created_at: datetime
     updated_at: datetime
-    model_config = ConfigDict(from_attributes=True,allow_population_by_field_name = True)
+    model_config = ConfigDict(from_attributes=True,validate_by_name = True)
         
 
 class CommentCreate(BaseModel):

@@ -1,4 +1,3 @@
-
 services:
   db:
     image: postgres:17
@@ -22,5 +21,10 @@ services:
       - db
     volumes:
       - .:/app
+      - ./certs:/app/certs:ro
+    command: >
+      uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+      --ssl-keyfile /app/certs/localhost-key.pem
+      --ssl-certfile /app/certs/localhost.pem
 
 

@@ -31,7 +31,7 @@ def get_jwt_strategy() -> JWTStrategy:
 cookie_transport = CookieTransport(
     cookie_name="threadfit_cookie",
     cookie_max_age=3600,
-    cookie_secure=False,  
+    cookie_secure=True,  
     cookie_httponly=True  
 )  # :contentReference[oaicite:4]{index=4}
 

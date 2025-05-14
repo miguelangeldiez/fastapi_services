@@ -3,14 +3,15 @@
 import uuid
 import pytest
 from httpx import AsyncClient
+import os
 
-BASE_URL = "http://localhost:8000"
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "")
 PASSWORD = "securepassword123"
 
 @pytest.mark.asyncio
 async def test_register_user():
     email = f"testregister_{uuid.uuid4().hex}@example.com"
-    async with AsyncClient(base_url=BASE_URL) as client:
+    async with AsyncClient(base_url=allowed_origins) as client:
         payload = {
             "email": email,
             "password": PASSWORD,
@@ -25,7 +26,7 @@ async def test_register_user():
 @pytest.mark.asyncio
 async def test_login_user():
     email = f"testlogin_{uuid.uuid4().hex}@example.com"
-    async with AsyncClient(base_url=BASE_URL) as client:
+    async with AsyncClient(base_url=allowed_origins) as client:
         # 1) Registro
         reg = await client.post(
             "/auth/register",

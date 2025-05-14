@@ -3,8 +3,9 @@
 import uuid
 import pytest
 from httpx import AsyncClient
+import os
 
-BASE_URL = "http://localhost:8000"
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "")
 PASSWORD = "securepassword123"
 
 # Example for test_create_post
@@ -12,7 +13,7 @@ PASSWORD = "securepassword123"
 async def test_create_post():
     email = f"poster_{uuid.uuid4().hex}@example.com"
 
-    async with AsyncClient(base_url=BASE_URL) as client:
+    async with AsyncClient(base_url=allowed_origins) as client:
         # Registro + login
         reg = await client.post(
             "/auth/register",
@@ -44,7 +45,7 @@ async def test_create_post():
 async def test_list_posts():
     email = f"poster2_{uuid.uuid4().hex}@example.com"
 
-    async with AsyncClient(base_url=BASE_URL) as client:
+    async with AsyncClient(base_url=allowed_origins) as client:
         # Registro + login
         reg = await client.post(
             "/auth/register",
@@ -60,10 +61,8 @@ async def test_list_posts():
         cookies = login.cookies
 
         # Listar posts paginados
-        resp = await client.get(
-            "/posts/all_posts?page=1&per_page=10",
-            cookies=cookies,
-        )
+        client.cookies.update(cookies)  # Configura las cookies en el cliente
+        resp = await client.get("/posts/all_posts?page=1&per_page=10")
     assert resp.status_code == 200, resp.text
     page = resp.json()
     # Debe devolver un dict con items y metadatos

@@ -3,11 +3,10 @@ from typing import List
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException,status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.main_db import get_db_session
-from app.real_time.websockets_routes import broadcast_message
 from app.routes.auth_routes import current_active_user
 from app.db.models import Post, Comment, Like, User
 from .schemas import (
@@ -72,7 +71,6 @@ async def post_comment(
     try:
         await db.commit()
         await db.refresh(new_comment)
-        await broadcast_message(f"Nuevo comentario en el post {post_id}: {new_comment.content}")
     except Exception as e:
         await db.rollback()
         raise HTTPException(
