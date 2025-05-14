@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Awaitable, Callable, Dict, Final
+from typing import Any, AsyncIterable, Awaitable, Callable, Dict, Final
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, status
 from fastapi.websockets import WebSocketState
-from jose import JWTError, jwt  # usa **una** sola librería
-from pydantic import BaseModel, Field, ValidationError
+from jose import JWTError, jwt 
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -54,11 +54,12 @@ manager = ConnectionManager()
 # ──────────────────────────────────────────────
 # Mapeo acción → función generadora
 # ──────────────────────────────────────────────
-ActionHandler = Callable[[Dict[str, Any], float], Awaitable[int]]
+ActionHandler = Callable[[Dict[str, Any], float], AsyncIterable[Dict[str, Any]]]
+
 ACTION_MAP: Dict[str, ActionHandler] = {
-    "generate_users": generation_routes.generate_users,
-    "generate_posts": generation_routes.generate_posts,
-    "generate_comments": generation_routes.generate_comments,
+    "generate_users": generation_routes.gen_users_ws,
+    "generate_posts": generation_routes.gen_posts_ws,
+    "generate_comments": generation_routes.gen_comments_ws,
 }
 
 # ──────────────────────────────────────────────
@@ -134,13 +135,13 @@ async def _run_generation(
 
 
 async def _authenticate_ws(ws: WebSocket, db: AsyncSession) -> User:
-    token = ws.cookies.get("access_token")
+    token = ws.cookies.get("threadfit_cookie")
     if not token:
         await ws.close(code=status.WS_1008_POLICY_VIOLATION)
         raise WebSocketDisconnect()
 
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[JWT_ALG])
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[JWT_ALG],audience="fastapi-users:auth")
         user_id = payload.get("sub")
         if not user_id:
             raise JWTError("missing sub")

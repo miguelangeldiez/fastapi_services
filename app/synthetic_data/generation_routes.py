@@ -1,3 +1,4 @@
+from typing import Any, AsyncIterator, Dict
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from faker import Faker
 import httpx
@@ -8,7 +9,7 @@ from app.synthetic_data.schemas import CommentRequest, PostRequest, UserRequest
 from app.routes.auth_routes import current_active_user
 from app.db.models import Batch, User
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.main_db import get_db_session
+from app.db.main_db import get_db_session, async_session
 from app.synthetic_data import fake, get_token_from_cookie
 from config import get_settings
 
@@ -25,21 +26,20 @@ async def generate_users(
     if request.seed is not None:
         Faker.seed(request.seed)
 
-    batch_id = str(uuid.uuid4())  # Generar un identificador único para el lote
+    batch_id = str(uuid.uuid4())  
 
-    # Crear un nuevo lote y asociarlo al usuario actual
     new_batch = Batch(id=batch_id, user_id=current_user.id)
     db.add(new_batch)
     await db.commit()
 
-    generated_users = []  # Almacenar los usuarios generados para el modo pull
+    generated_users = [] 
 
     async with httpx.AsyncClient() as client:
         for _ in range(request.num_users):
             user_data = {
                 "email": fake.email(),
                 "password": fake.password(length=10),
-                "batch_id": batch_id,  # Asociar el lote al usuario
+                "batch_id": batch_id, 
             }
             user_response = await client.post(
                 f"{settings.ALLOWED_ORIGINS}/auth/register",
@@ -53,10 +53,8 @@ async def generate_users(
                 )
             generated_users.append(user_data)  
             await asyncio.sleep(1.0 / request.speed_multiplier)
-
-    if request.mode == "pull":
-        return {"msg": f"{request.num_users} usuarios registrados con éxito.", "batch_id": batch_id, "data": generated_users}
-    return {"msg": f"{request.num_users} usuarios registrados con éxito.", "batch_id": batch_id}
+    return {"msg": f"{request.num_users} usuarios registrados con éxito.", "batch_id": batch_id, "data": generated_users}
+    
 
 @synthetic_router.post("/posts", summary="Generar y registrar publicaciones ficticias")
 async def generate_posts(
@@ -68,13 +66,12 @@ async def generate_posts(
     if request.seed is not None:
         Faker.seed(request.seed)
 
-    # Crear un nuevo lote y asociarlo al usuario actual
     new_batch = Batch(user_id=current_user.id)
     db.add(new_batch)
     await db.commit()
-    await db.refresh(new_batch)  # Refrescar para obtener el ID generado
+    await db.refresh(new_batch)  
 
-    generated_posts = []  # Almacenar las publicaciones generadas para el modo pull
+    generated_posts = []  
 
     async with httpx.AsyncClient() as client:
         for _ in range(request.num_posts):
@@ -98,9 +95,7 @@ async def generate_posts(
             generated_posts.append(post_data)  # Agregar al modo pull
             await asyncio.sleep(1.0 / request.speed_multiplier)
 
-    if request.mode == "pull":
-        return {"msg": f"{request.num_posts} publicaciones registradas con éxito.", "batch_id": str(new_batch.id), "data": generated_posts}
-    return {"msg": f"{request.num_posts} publicaciones registradas con éxito.", "batch_id": str(new_batch.id)}
+    return {"msg": f"{request.num_posts} publicaciones registradas con éxito.", "batch_id": str(new_batch.id), "data": generated_posts}
 
 @synthetic_router.post("/comments", summary="Generar y registrar comentarios ficticios")
 async def generate_comments(
@@ -139,7 +134,101 @@ async def generate_comments(
                 )
             generated_comments.append(comment_data)  
             await asyncio.sleep(1.0 / request.speed_multiplier)
+    return {"msg": f"{request.num_comments} comentarios registrados con éxito.", "batch_id": str(new_batch.id), "data": generated_comments}
 
-    if request.mode == "pull":
-        return {"msg": f"{request.num_comments} comentarios registrados con éxito.", "batch_id": str(new_batch.id), "data": generated_comments}
-    return {"msg": f"{request.num_comments} comentarios registrados con éxito.", "batch_id": str(new_batch.id)}
+def _assert_status(resp: httpx.Response, expected_code: int = 201) -> None:
+    """Lanza una excepción si la respuesta HTTP no coincide con *expected_code*."""
+    if resp.status_code != expected_code:
+        raise RuntimeError(
+            f"Error {resp.status_code}: {resp.text[:200]}… (expected {expected_code})"
+        )
+
+async def gen_users_ws(payload: Dict[str, Any], speed: float) -> AsyncIterator[Dict[str, Any]]:
+    amount: int = payload.get("amount", 1)
+    token: str = payload["token"]
+    user_id: str = payload.get("user_id")
+    batch_id = payload.get("batch_id") or str(uuid.uuid4())
+
+    if "batch_id" not in payload:
+        # Crear el batch en BD localmente
+        async with async_session() as db:
+            new_batch = Batch(id=batch_id, user_id=user_id)
+            db.add(new_batch)
+            await db.commit()
+
+    async with httpx.AsyncClient(verify=False) as client:
+        for _ in range(amount):
+            user_data = {
+                "email": fake.email(),
+                "password": fake.password(length=10),
+                "batch_id": batch_id,
+            }
+            resp = await client.post(
+                f"{settings.ALLOWED_ORIGINS}auth/register",
+                json=user_data,
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            _assert_status(resp)
+            yield user_data
+            await asyncio.sleep(1.0 / speed)
+
+
+async def gen_posts_ws(payload: Dict[str, Any], speed: float) -> AsyncIterator[Dict[str, Any]]:
+    amount: int = payload.get("amount", 1)
+    token: str = payload["token"]
+    user_id: str = payload.get("user_id")
+    batch_id = payload.get("batch_id") or str(uuid.uuid4())
+
+    if "batch_id" not in payload:
+        async with async_session() as db:
+            new_batch = Batch(id=batch_id, user_id=user_id)
+            db.add(new_batch)
+            await db.commit()
+
+    async with httpx.AsyncClient(verify=False) as client:
+        for _ in range(amount):
+            post_data = {
+                "title": fake.sentence(),
+                "content": fake.paragraph(),
+                "is_published": True,
+                "user_id": user_id,
+                "batch_id": batch_id,
+            }
+            resp = await client.post(
+                f"{settings.ALLOWED_ORIGINS}posts/create_post",
+                json=post_data,
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            _assert_status(resp)
+            yield post_data
+            await asyncio.sleep(1.0 / speed)
+
+
+async def gen_comments_ws(payload: Dict[str, Any], speed: float) -> AsyncIterator[Dict[str, Any]]:
+    amount: int = payload.get("amount", 1)
+    token: str = payload["token"]
+    user_id: str = payload.get("user_id")
+    post_id: str = payload.get("post_id")
+    batch_id = payload.get("batch_id") or str(uuid.uuid4())
+
+    if "batch_id" not in payload:
+        async with async_session() as db:
+            new_batch = Batch(id=batch_id, user_id=user_id)
+            db.add(new_batch)
+            await db.commit()
+
+    async with httpx.AsyncClient(verify=False) as client:
+        for _ in range(amount):
+            comment_data = {
+                "content": fake.sentence(),
+                "post_id": post_id,
+                "batch_id": batch_id,
+            }
+            resp = await client.post(
+                f"{settings.ALLOWED_ORIGINS}interactions/{post_id}/comments",
+                json=comment_data,
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            _assert_status(resp)
+            yield comment_data
+            await asyncio.sleep(1.0 / speed)
