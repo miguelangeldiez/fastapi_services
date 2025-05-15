@@ -9,7 +9,7 @@ from app.db.main_db import get_db_session
 from app.routes.auth_routes import current_active_user
 from app.db.models import User ,Post  
 from .schemas import PaginatedPostsResponse,UserRead
-
+from config import logger
 
 
 profile_router = APIRouter(prefix="/user", tags=["Profile Settings"],dependencies=[Depends(current_active_user)])

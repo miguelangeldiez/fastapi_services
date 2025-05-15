@@ -1,0 +1,25 @@
+# Archivos de control de versiones
+.git
+.gitignore
+
+# Archivos generados por Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Archivos de configuración local
+.env
+.vscode/
+.idea/
+
+# Archivos de construcción y distribución
+dist/
+build/
+*.log
+
+# Archivos específicos del proyecto
+alembic/__pycache__/
+alembic/versions/__pycache__/
+app/__pycache__/
+tests/__pycache__/

@@ -1,0 +1,42 @@
+services:
+  fastapi-server:
+    build:
+      context: .
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    container_name: threadfit-auth-synthetic
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    volumes:
+      - ./certs:/certs:ro
+    networks:
+      - backend
+
+  postgres-db:
+    image: postgres:17
+    container_name: postgres-db
+    env_file:
+      - .env
+    restart: unless-stopped
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  pgdata:
+    # Persistent storage for PostgreSQL data

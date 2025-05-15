@@ -11,7 +11,7 @@ from app.db.models import Batch, User
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.main_db import get_db_session, async_session
 from app.synthetic_data import fake, get_token_from_cookie
-from config import get_settings
+from config import get_settings, logger
 
 synthetic_router = APIRouter(prefix="/synthetic", tags=["Synthetic Data Generation"])
 settings = get_settings()
@@ -23,38 +23,46 @@ async def generate_users(
     current_user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    logger.info(f"Iniciando generación de usuarios ficticios. Solicitud: {request}")
     if request.seed is not None:
         Faker.seed(request.seed)
+        logger.info(f"Semilla establecida para Faker: {request.seed}")
 
-    batch_id = str(uuid.uuid4())  
+    batch_id = str(uuid.uuid4())
+    logger.info(f"Creando nuevo batch con ID: {batch_id}")
 
     new_batch = Batch(id=batch_id, user_id=current_user.id)
     db.add(new_batch)
     await db.commit()
+    logger.info(f"Batch creado y guardado en la base de datos: {batch_id}")
 
-    generated_users = [] 
+    generated_users = []
 
     async with httpx.AsyncClient() as client:
-        for _ in range(request.num_users):
+        for i in range(request.num_users):
             user_data = {
                 "email": fake.email(),
                 "password": fake.password(length=10),
-                "batch_id": batch_id, 
+                "batch_id": batch_id,
             }
+            logger.info(f"Generando usuario {i + 1}/{request.num_users}: {user_data}")
             user_response = await client.post(
                 f"{settings.ALLOWED_ORIGINS}/auth/register",
                 json=user_data,
                 headers={"Authorization": f"Bearer {token}"}
             )
             if user_response.status_code != 201:
+                logger.error(f"Error al registrar usuario: {user_response.text}")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Error al registrar usuario: {user_response.text}",
                 )
-            generated_users.append(user_data)  
+            generated_users.append(user_data)
+            logger.info(f"Usuario registrado con éxito: {user_data}")
             await asyncio.sleep(1.0 / request.speed_multiplier)
+    logger.info(f"Generación de usuarios completada. Total: {len(generated_users)}")
     return {"msg": f"{request.num_users} usuarios registrados con éxito.", "batch_id": batch_id, "data": generated_users}
-    
+
 
 @synthetic_router.post("/posts", summary="Generar y registrar publicaciones ficticias")
 async def generate_posts(
@@ -63,38 +71,45 @@ async def generate_posts(
     current_user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    logger.info(f"Iniciando generación de publicaciones ficticias. Solicitud: {request}")
     if request.seed is not None:
         Faker.seed(request.seed)
+        logger.info(f"Semilla establecida para Faker: {request.seed}")
 
     new_batch = Batch(user_id=current_user.id)
     db.add(new_batch)
     await db.commit()
-    await db.refresh(new_batch)  
+    await db.refresh(new_batch)
+    logger.info(f"Batch creado y guardado en la base de datos: {new_batch.id}")
 
-    generated_posts = []  
+    generated_posts = []
 
     async with httpx.AsyncClient() as client:
-        for _ in range(request.num_posts):
+        for i in range(request.num_posts):
             post_data = {
                 "title": fake.sentence(),
                 "content": fake.paragraph(),
                 "is_published": True,
                 "user_id": request.user_id,
-                "batch_id": str(new_batch.id),  # Asociar el lote a la publicación
+                "batch_id": str(new_batch.id),
             }
+            logger.info(f"Generando publicación {i + 1}/{request.num_posts}: {post_data}")
             post_response = await client.post(
                 f"{settings.ALLOWED_ORIGINS}/posts/create_post",
                 json=post_data,
                 headers={"Authorization": f"Bearer {token}"}
             )
             if post_response.status_code != 201:
+                logger.error(f"Error al crear publicación: {post_response.text}")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Error al crear publicación: {post_response.text}",
                 )
-            generated_posts.append(post_data)  # Agregar al modo pull
+            generated_posts.append(post_data)
+            logger.info(f"Publicación registrada con éxito: {post_data}")
             await asyncio.sleep(1.0 / request.speed_multiplier)
 
+    logger.info(f"Generación de publicaciones completada. Total: {len(generated_posts)}")
     return {"msg": f"{request.num_posts} publicaciones registradas con éxito.", "batch_id": str(new_batch.id), "data": generated_posts}
 
 @synthetic_router.post("/comments", summary="Generar y registrar comentarios ficticios")
@@ -104,36 +119,43 @@ async def generate_comments(
     current_user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    logger.info(f"Iniciando generación de comentarios ficticios. Solicitud: {request}")
     if request.seed is not None:
         Faker.seed(request.seed)
+        logger.info(f"Semilla establecida para Faker: {request.seed}")
 
     # Crear un nuevo lote y asociarlo al usuario actual
     new_batch = Batch(user_id=current_user.id)
     db.add(new_batch)
     await db.commit()
-    await db.refresh(new_batch) 
+    await db.refresh(new_batch)
+    logger.info(f"Batch creado y guardado en la base de datos: {new_batch.id}")
 
-    generated_comments = []  
+    generated_comments = []
 
     async with httpx.AsyncClient() as client:
-        for _ in range(request.num_comments):
+        for i in range(request.num_comments):
             comment_data = {
                 "content": fake.sentence(),
                 "post_id": request.post_id,
-                "batch_id": str(new_batch.id),  
+                "batch_id": str(new_batch.id),
             }
+            logger.info(f"Generando comentario {i + 1}/{request.num_comments}: {comment_data}")
             comment_response = await client.post(
                 f"{settings.ALLOWED_ORIGINS}/interactions/{request.post_id}/comments",
                 json=comment_data,
                 headers={"Authorization": f"Bearer {token}"}
             )
             if comment_response.status_code != 201:
+                logger.error(f"Error al agregar comentario: {comment_response.text}")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Error al agregar comentario: {comment_response.text}",
                 )
-            generated_comments.append(comment_data)  
+            generated_comments.append(comment_data)
+            logger.info(f"Comentario registrado con éxito: {comment_data}")
             await asyncio.sleep(1.0 / request.speed_multiplier)
+    logger.info(f"Generación de comentarios completada. Total: {len(generated_comments)}")
     return {"msg": f"{request.num_comments} comentarios registrados con éxito.", "batch_id": str(new_batch.id), "data": generated_comments}
 
 def _assert_status(resp: httpx.Response, expected_code: int = 201) -> None:

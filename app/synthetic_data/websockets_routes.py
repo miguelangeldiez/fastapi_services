@@ -15,7 +15,7 @@ from app.db.main_db import get_db_session
 from app.db.models import User
 from app.synthetic_data import generation_routes
 from app.synthetic_data.schemas import WSMessage
-from config import get_settings
+from config import get_settings,logger
 
 # ──────────────────────────────────────────────
 # Configuración global
@@ -70,20 +70,26 @@ async def websocket_generate(
     ws: WebSocket,
     db: AsyncSession = Depends(get_db_session),
 ) -> None:
+    logger.info("Nueva conexión WebSocket iniciada.")
     try:
         user = await _authenticate_ws(ws, db)
+        logger.info(f"Usuario autenticado: {user.id}")
         await manager.connect(ws, user.id)
+        logger.info(f"Conexión WebSocket establecida para el usuario {user.id}")
 
         while True:
             try:
                 raw = await ws.receive_json()
+                logger.info(f"Mensaje recibido: {raw}")
                 msg = WSMessage(**raw)  # valida
             except (ValidationError, ValueError) as ve:
+                logger.error(f"Error al validar el mensaje: {ve}")
                 await ws.send_json({"type": "error", "detail": str(ve)})
                 continue
 
             handler = ACTION_MAP.get(msg.action)
             if not handler:
+                logger.warning(f"Acción desconocida: {msg.action}")
                 await ws.send_json(
                     {"type": "error", "detail": f"Acción desconocida: {msg.action}"}
                 )
@@ -91,13 +97,14 @@ async def websocket_generate(
 
             await _run_generation(ws, handler, msg)
     except WebSocketDisconnect:
-        logger.info("WebSocket desconectado")
-    except Exception:
+        logger.info("WebSocket desconectado.")
+    except Exception as e:
         logger.exception("Error inesperado en WebSocket", exc_info=True)
         if ws.application_state != WebSocketState.DISCONNECTED:
             await ws.close(code=status.WS_1011_INTERNAL_ERROR)
     finally:
         manager.disconnect(user.id)
+        logger.info(f"Conexión WebSocket cerrada para el usuario {user.id}")
 
 
 # ──────────────────────────────────────────────
@@ -137,15 +144,17 @@ async def _run_generation(
 async def _authenticate_ws(ws: WebSocket, db: AsyncSession) -> User:
     token = ws.cookies.get("threadfit_cookie")
     if not token:
+        logger.warning("Intento de conexión WebSocket sin token.")
         await ws.close(code=status.WS_1008_POLICY_VIOLATION)
         raise WebSocketDisconnect()
 
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[JWT_ALG],audience="fastapi-users:auth")
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[JWT_ALG], audience="fastapi-users:auth")
         user_id = payload.get("sub")
         if not user_id:
-            raise JWTError("missing sub")
-    except JWTError:
+            raise JWTError("El token no contiene el campo 'sub'.")
+    except JWTError as e:
+        logger.error(f"Error al decodificar el token JWT: {e}")
         await ws.close(code=status.WS_1008_POLICY_VIOLATION)
         raise WebSocketDisconnect()
 
@@ -154,6 +163,7 @@ async def _authenticate_ws(ws: WebSocket, db: AsyncSession) -> User:
         .scalar_one_or_none()
     )
     if not user:
+        logger.warning(f"Usuario no encontrado para el ID: {user_id}")
         await ws.close(code=status.WS_1008_POLICY_VIOLATION)
         raise WebSocketDisconnect()
     return user

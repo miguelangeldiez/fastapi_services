@@ -5,7 +5,7 @@ from sqlalchemy.orm import selectinload
 
 from fastapi import APIRouter, Depends, HTTPException,status
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from config import logger
 from app.db.main_db import get_db_session
 from app.routes.auth_routes import current_active_user
 from app.db.models import Post, User
@@ -31,9 +31,11 @@ async def get_all_posts(
     per_page: int = 10,
     db: AsyncSession = Depends(get_db_session),
 ) -> PaginatedPostsResponse:
+    logger.info(f"Solicitud para listar publicaciones: page={page}, per_page={per_page}")
     total_stmt = select(func.count()).select_from(Post)
     total_result = await db.execute(total_stmt)
     total = total_result.scalar_one()
+    logger.info(f"Total de publicaciones: {total}")
 
     stmt = (
         select(Post)
@@ -46,15 +48,16 @@ async def get_all_posts(
     )
     result = await db.execute(stmt)
     posts = result.scalars().all()
+    logger.info(f"Publicaciones obtenidas: {len(posts)}")
 
     return PaginatedPostsResponse(
-        posts=posts, 
-        total=total,  
-        pages=ceil(total / per_page),  
-        current_page=page, 
-        per_page=per_page,  
-        has_next=(page * per_page) < total,  
-        has_prev=page > 1,  
+        posts=posts,
+        total=total,
+        pages=ceil(total / per_page),
+        current_page=page,
+        per_page=per_page,
+        has_next=(page * per_page) < total,
+        has_prev=page > 1,
     )
 
 

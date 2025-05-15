@@ -3,9 +3,7 @@
 import uuid
 import pytest
 from httpx import AsyncClient
-import os
-
-from config import get_settings
+from config import get_settings, logger
 
 settings = get_settings()
 PASSWORD = "securepassword123"
@@ -13,32 +11,34 @@ PASSWORD = "securepassword123"
 # Example for test_create_post
 @pytest.mark.asyncio
 async def test_create_post():
+    logger.info("Iniciando prueba para crear una publicación.")
     email = f"poster_{uuid.uuid4().hex}@example.com"
 
     async with AsyncClient(base_url=settings.ALLOWED_ORIGINS, verify=False) as client:
-        # Registro + login
+        logger.info(f"Registrando usuario con email: {email}")
         reg = await client.post(
             "/auth/register",
             json={"email": email, "password": PASSWORD, "batch_id": None},
         )
         assert reg.status_code == 201, f"Registro falló: {reg.text}"
+        logger.info("Usuario registrado con éxito.")
 
         login = await client.post(
             "/auth/login",
             data={"username": email, "password": PASSWORD},
         )
         assert login.status_code == 204, f"Login falló: {login.text}"
+        logger.info("Usuario autenticado con éxito.")
 
-        # Set cookies on the client
         client.cookies.update(login.cookies)
 
-        # Crear post
+        logger.info("Creando una nueva publicación.")
         resp = await client.post(
             "/posts/create_post",
             json={"title": "Mi título", "content": "Contenido chulo"},
         )
-        print("Post creation response:", resp.status_code, resp.json())
-    assert resp.status_code == 201, resp.text
+        assert resp.status_code == 201, resp.text
+        logger.info("Publicación creada con éxito.")
     data = resp.json()["data"] # Accede al objeto `data`
     assert data["title"] == "Mi título"
     assert data["content"] == "Contenido chulo"

@@ -6,7 +6,6 @@ from sqlalchemy import select
 from io import StringIO, BytesIO
 import csv
 from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import (
@@ -15,7 +14,7 @@ from reportlab.platypus import (
 from app.db.models import Batch, User, Post, Comment
 from app.db.main_db import get_db_session
 from app.routes.auth_routes import current_active_user
-from app.synthetic_data.generation_routes import get_token_from_cookie
+from config import logger
 
 data_router = APIRouter(prefix="/data", tags=["Data Collection"])
 
@@ -28,13 +27,15 @@ async def get_users(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(current_active_user),
 ):
-    # Consultar usuarios generados asociados al batch_id
+    logger.info(f"Obteniendo usuarios generados para batch_id: {batch_id} en formato: {format}")
     query = await session.execute(
         select(User).where(User.batch_id == batch_id)
     )
     users = query.scalars().all()
+    logger.info(f"Usuarios obtenidos: {len(users)}")
 
     if format == "csv":
+        logger.info("Generando archivo CSV para usuarios.")
         output = StringIO()
         writer = csv.DictWriter(output, fieldnames=["id", "email", "is_active", "is_superuser", "is_verified"])
         writer.writeheader()
@@ -47,13 +48,13 @@ async def get_users(
                 "is_verified": user.is_verified,
             })
         output.seek(0)
+        logger.info("Archivo CSV generado con éxito.")
         return StreamingResponse(output, media_type="text/csv", headers={
             "Content-Disposition": "attachment; filename=users.csv"
         })
     elif format == "pdf":
+        logger.info("Generando archivo PDF para usuarios.")
         buffer = BytesIO()
-
-        # a) Plantilla y estilos
         doc = SimpleDocTemplate(
             buffer,
             pagesize=letter,
@@ -66,12 +67,7 @@ async def get_users(
             Paragraph("Usuarios generados", styles["Title"]),
             Spacer(1, 12),
         ]
-
-        # b) Datos tabulares
-        headers = [
-            "ID", "Email", "Activo",
-            "Verificado", "Superusuario"
-        ]
+        headers = ["ID", "Email", "Activo", "Verificado", "Superusuario"]
         rows = [headers]
         for u in users:
             rows.append([
@@ -81,47 +77,45 @@ async def get_users(
                 "Sí" if u.is_verified else "No",
                 "Sí" if u.is_superuser else "No",
             ])
-
-        # c) Construcción de la tabla
         table = Table(rows, repeatRows=1)
         table.setStyle(TableStyle([
-            # Header
             ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("FONTSIZE", (0, 0), (-1, 0), 10),
             ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
-            # Data cells
             ("BACKGROUND", (0, 1), (-1, -1), colors.lightgrey),
             ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
             ("ALIGN", (0, 0), (-1, -1), "LEFT"),
         ]))
         elements.append(table)
-
-        # d) Generar PDF
         doc.build(elements)
         buffer.seek(0)
-
+        logger.info("Archivo PDF generado con éxito.")
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
             headers={"Content-Disposition": "attachment; filename=users.pdf"},
         )
+    logger.info("Devolviendo usuarios en formato JSON.")
     return {"data": [user.__dict__ for user in users]}
 
 
 # Ruta para obtener publicaciones generadas por el usuario autenticado
 @data_router.get("/posts", summary="Obtener publicaciones generadas")
 async def get_posts(
-    batch_id : UUID = Query(..., description="Identificador del lote"),
+    batch_id: UUID = Query(..., description="Identificador del lote"),
     format: str = Query("json", enum=["json", "csv", "pdf"]),
     session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(current_active_user),  # Usuario autenticado
+    current_user: User = Depends(current_active_user),
 ):
+    logger.info(f"Obteniendo publicaciones generadas para batch_id: {batch_id} en formato: {format}")
     query = await session.execute(select(Post).where(Post.batch_id == batch_id))
     posts = query.scalars().all()
+    logger.info(f"Publicaciones obtenidas: {len(posts)}")
 
     if format == "csv":
+        logger.info("Generando archivo CSV para publicaciones.")
         output = StringIO()
         writer = csv.DictWriter(output, fieldnames=["id", "title", "content", "is_published", "user_id"])
         writer.writeheader()
@@ -134,14 +128,13 @@ async def get_posts(
                 "user_id": post.user_id,
             })
         output.seek(0)
+        logger.info("Archivo CSV generado con éxito.")
         return StreamingResponse(output, media_type="text/csv", headers={
             "Content-Disposition": "attachment; filename=posts.csv"
         })
-
     elif format == "pdf":
+        logger.info("Generando archivo PDF para publicaciones.")
         buffer = BytesIO()
-
-        # a) Plantilla y estilos
         doc = SimpleDocTemplate(
             buffer,
             pagesize=letter,
@@ -154,11 +147,7 @@ async def get_posts(
             Paragraph("Posts generados", styles["Title"]),
             Spacer(1, 12),
         ]
-
-        # b) Datos tabulares
-        headers = [
-            "ID", "Titulo", "Publicado"
-        ]
+        headers = ["ID", "Titulo", "Publicado"]
         rows = [headers]
         for p in posts:
             rows.append([
@@ -166,48 +155,45 @@ async def get_posts(
                 p.title,
                 "Sí" if p.is_published else "No"
             ])
-
-        # c) Construcción de la tabla
         table = Table(rows, repeatRows=1)
         table.setStyle(TableStyle([
-            # Header
             ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("FONTSIZE", (0, 0), (-1, 0), 10),
             ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
-            # Data cells
             ("BACKGROUND", (0, 1), (-1, -1), colors.lightgrey),
             ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
             ("ALIGN", (0, 0), (-1, -1), "LEFT"),
         ]))
         elements.append(table)
-
-        # d) Generar PDF
         doc.build(elements)
         buffer.seek(0)
-
+        logger.info("Archivo PDF generado con éxito.")
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
             headers={"Content-Disposition": "attachment; filename=posts.pdf"},
         )
-
+    logger.info("Devolviendo publicaciones en formato JSON.")
     return {"data": [post.__dict__ for post in posts]}
 
 
 # Ruta para obtener comentarios generados por el usuario autenticado
 @data_router.get("/comments", summary="Obtener comentarios generados")
 async def get_comments(
-    batch_id : UUID = Query(..., description="Identificador del lote"),
+    batch_id: UUID = Query(..., description="Identificador del lote"),
     format: str = Query("json", enum=["json", "csv", "pdf"]),
     session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(current_active_user),  # Usuario autenticado
+    current_user: User = Depends(current_active_user),
 ):
+    logger.info(f"Obteniendo comentarios generados para batch_id: {batch_id} en formato: {format}")
     query = await session.execute(select(Comment).where(Comment.batch_id == batch_id))
     comments = query.scalars().all()
+    logger.info(f"Comentarios obtenidos: {len(comments)}")
 
     if format == "csv":
+        logger.info("Generando archivo CSV para comentarios.")
         output = StringIO()
         writer = csv.DictWriter(output, fieldnames=["id", "content", "post_id", "user_id"])
         writer.writeheader()
@@ -219,15 +205,13 @@ async def get_comments(
                 "user_id": comment.user_id,
             })
         output.seek(0)
+        logger.info("Archivo CSV generado con éxito.")
         return StreamingResponse(output, media_type="text/csv", headers={
             "Content-Disposition": "attachment; filename=comments.csv"
         })
-
     elif format == "pdf":
-
+        logger.info("Generando archivo PDF para comentarios.")
         buffer = BytesIO()
-
-        # a) Plantilla y estilos
         doc = SimpleDocTemplate(
             buffer,
             pagesize=letter,
@@ -240,11 +224,7 @@ async def get_comments(
             Paragraph("Comentarios generados", styles["Title"]),
             Spacer(1, 12),
         ]
-
-        # b) Datos tabulares
-        headers = [
-            "ID", "Contenido", "Post ID"
-        ]
+        headers = ["ID", "Contenido", "Post ID"]
         rows = [headers]
         for c in comments:
             rows.append([
@@ -252,58 +232,56 @@ async def get_comments(
                 c.content,
                 str(c.post_id)
             ])
-
-        # c) Construcción de la tabla
         table = Table(rows, repeatRows=1)
         table.setStyle(TableStyle([
-            # Header
             ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("FONTSIZE", (0, 0), (-1, 0), 10),
             ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
-            # Data cells
             ("BACKGROUND", (0, 1), (-1, -1), colors.lightgrey),
             ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
             ("ALIGN", (0, 0), (-1, -1), "LEFT"),
         ]))
         elements.append(table)
-
-        # d) Generar PDF
         doc.build(elements)
         buffer.seek(0)
-
+        logger.info("Archivo PDF generado con éxito.")
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
             headers={"Content-Disposition": "attachment; filename=comments.pdf"},
         )
-
+    logger.info("Devolviendo comentarios en formato JSON.")
     return {"data": [comment.__dict__ for comment in comments]}
 
 
+# Ruta para obtener todos los batch_id del usuario autenticado
 @data_router.get("/batches", summary="Obtener todos los batch_id del usuario autenticado")
 async def get_batches(
     session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(current_active_user),  # Usuario autenticado
+    current_user: User = Depends(current_active_user),
 ):
-    # Consultar los batch_id únicos asociados al usuario
+    logger.info(f"Obteniendo batch_ids para el usuario autenticado: {current_user.id}")
     query = await session.execute(
         select(Batch.batch_id).where(User.id == current_user.id).distinct()
     )
     user_batches = query.scalars().all()
+    logger.info(f"Batch_ids de usuarios obtenidos: {user_batches}")
 
     query = await session.execute(
         select(Post.batch_id).where(Post.user_id == current_user.id).distinct()
     )
     post_batches = query.scalars().all()
+    logger.info(f"Batch_ids de publicaciones obtenidos: {post_batches}")
 
     query = await session.execute(
         select(Comment.batch_id).where(Comment.user_id == current_user.id).distinct()
     )
     comment_batches = query.scalars().all()
+    logger.info(f"Batch_ids de comentarios obtenidos: {comment_batches}")
 
-    # Combinar todos los batch_id únicos
     all_batches = set(user_batches + post_batches + comment_batches)
+    logger.info(f"Todos los batch_ids combinados: {all_batches}")
 
     return {"batches": list(all_batches)}

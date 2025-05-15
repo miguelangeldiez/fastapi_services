@@ -9,8 +9,7 @@ from fastapi_users.authentication import (
 )
 import uuid
 from app.db.models import User
-from config import get_settings
-
+from config import get_settings, logger
 # Initialize settings
 settings = get_settings()
 

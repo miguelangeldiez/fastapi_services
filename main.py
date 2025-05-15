@@ -1,14 +1,4 @@
-import debugpy
-
-try:
-    if not debugpy.is_client_connected():
-        debugpy.listen(("0.0.0.0", 5678))
-        print("Esperando debugger...")
-except RuntimeError as e:
-    print(f"Debugpy ya está escuchando o no se puede iniciar: {e}")
-
-
-
+from fastapi.responses import RedirectResponse
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes.interactions_routes import interactions_router
@@ -18,6 +8,7 @@ from app.routes.auth_routes import auth_router
 from app.synthetic_data.generation_routes import synthetic_router
 from app.synthetic_data.data_collection_routes import data_router 
 from app.synthetic_data.websockets_routes import websocket_router
+from config import logger
 
 # Inicialización de la aplicación FastAPI
 app = FastAPI(
@@ -26,20 +17,40 @@ app = FastAPI(
     version="1.0.0",
 )
 
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse(url="/docs")
+
 # Middleware CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://localhost:8000"],  # Restringe a dominios específicos
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Registro de routers
+logger.info("Registrando routers...")
 app.include_router(auth_router)
+logger.info("Router de autenticación registrado.")
 app.include_router(profile_router)
+logger.info("Router de perfiles registrado.")
 app.include_router(posts_router)
+logger.info("Router de publicaciones registrado.")
 app.include_router(interactions_router)
+logger.info("Router de interacciones registrado.")
 app.include_router(synthetic_router)
+logger.info("Router de generación de datos sintéticos registrado.")
 app.include_router(data_router)
+logger.info("Router de recolección de datos registrado.")
 app.include_router(websocket_router)
+logger.info("Router de WebSockets registrado.")
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("La aplicación ThreadFit ha iniciado.")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("La aplicación ThreadFit se está cerrando.")
