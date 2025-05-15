@@ -13,7 +13,7 @@ services:
       context: .
     env_file:
       - .env
-    container_name: fastapi-services
+    container_name: threadfit-auth-synthetic
     ports:
       - "8000:8000"
       - "5678:5678"
