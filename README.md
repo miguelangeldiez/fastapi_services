@@ -151,4 +151,18 @@ Dockerfile
 
 ---
 
+## 🛠️ Inicializar y migrar la base de datos con Alembic
+
+Antes de usar la API, asegúrate de que las tablas estén creadas y migradas con Alembic.
+
+### 1. Ejecutar migraciones en Docker
+
+Con los contenedores levantados, ejecuta:
+
+```bash
+docker-compose exec fastapi-server alembic upgrade head
+```
+
+---
+
 ¡Listo para escalar y probar en local o en la nube! 🚀

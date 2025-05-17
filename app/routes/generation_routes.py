@@ -1,16 +1,14 @@
-from typing import Any, AsyncIterator, Dict
 from fastapi import APIRouter, Depends
 import asyncio
-import uuid
 
 from app.routes.schemas import CommentRequest, PostRequest, UserRequest
-from app.routes.auth_routes import current_active_user
+from app.services.auth_service import current_active_user, get_token_from_cookie, get_user_manager
 from app.db.models import User
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.main_db import get_db_session, async_session
-from app.routes import fake, get_token_from_cookie
+from app.db.main_db import get_db_session
 from app.config import logger
-from app.services.synthetic_service import create_batch, create_fake_user, create_fake_post, create_fake_comment
+from app.services.synthetic_service import create_batch, create_fake_user, create_fake_post, create_fake_comment, set_fake_seed
+from sqlalchemy.exc import IntegrityError
 
 synthetic_router = APIRouter(prefix="/synthetic", tags=["Synthetic Data Generation"])
 
@@ -24,12 +22,13 @@ async def generate_users(
     token: str = Depends(get_token_from_cookie),
     current_user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_db_session),
+    user_manager = Depends(get_user_manager),
 ):
     """
     Genera usuarios ficticios y los registra directamente en la base de datos.
     """
+    set_fake_seed(request.seed)
     if request.seed is not None:
-        fake.seed_instance(request.seed)
         logger.info(f"Semilla establecida para Faker: {request.seed}")
 
     batch_id = await create_batch(db, current_user.id)
@@ -37,7 +36,7 @@ async def generate_users(
 
     generated_users = []
     for _ in range(request.num_users):
-        user_data = await create_fake_user(db, batch_id)
+        user_data = await create_fake_user(db, batch_id, user_manager=user_manager)
         generated_users.append(user_data)
         await asyncio.sleep(_safe_sleep(request.speed_multiplier))
     logger.info(f"Generación de usuarios completada. Total: {len(generated_users)}")
@@ -53,8 +52,8 @@ async def generate_posts(
     """
     Genera publicaciones ficticias y las registra directamente en la base de datos.
     """
+    set_fake_seed(request.seed)
     if request.seed is not None:
-        fake.seed_instance(request.seed)
         logger.info(f"Semilla establecida para Faker: {request.seed}")
 
     batch_id = await create_batch(db, current_user.id)
@@ -62,7 +61,17 @@ async def generate_posts(
 
     generated_posts = []
     for _ in range(request.num_posts):
-        post_data = await create_fake_post(db, request.user_id, batch_id)
+        try:
+            post_data = await create_fake_post(db, request.user_id, batch_id)
+        except IntegrityError as e:
+            await db.rollback()
+            if "foreign key constraint" in str(e).lower() or "violates foreign key" in str(e).lower():
+                from fastapi import HTTPException
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"El user_id '{request.user_id}' no existe."
+                )
+            raise
         generated_posts.append(post_data)
         await asyncio.sleep(_safe_sleep(request.speed_multiplier))
     logger.info(f"Generación de publicaciones completada. Total: {len(generated_posts)}")
@@ -78,8 +87,8 @@ async def generate_comments(
     """
     Genera comentarios ficticios y los registra directamente en la base de datos.
     """
+    set_fake_seed(request.seed)
     if request.seed is not None:
-        fake.seed_instance(request.seed)
         logger.info(f"Semilla establecida para Faker: {request.seed}")
 
     batch_id = await create_batch(db, current_user.id)

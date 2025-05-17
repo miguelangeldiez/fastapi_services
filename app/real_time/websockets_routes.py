@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, AsyncIterable, Callable, Dict, Final
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, status
 from fastapi.websockets import WebSocketState
@@ -12,7 +12,6 @@ from sqlalchemy import select
 
 from app.db.main_db import get_db_session
 from app.db.models import User
-from app.routes import generation_routes
 from app.routes.schemas import WSMessage
 from app.config import logger, get_settings
 from app.services.synthetic_service import (
@@ -69,10 +68,9 @@ ACTION_MAP: Dict[str, ActionHandler] = {
     "generate_users": lambda payload, speed: ws_generate_items(
         amount=payload.get("amount", 1),
         create_fn=create_fake_user,
-        batch_id=payload.get("batch_id"),
+        batch_id=payload.get("batch_id") or str(uuid.uuid4()),
         batch_check_user_id=payload.get("user_id"),
         speed=speed,
-        batch_id=payload.get("batch_id") or str(uuid.uuid4()),
     ),
     "generate_posts": lambda payload, speed: ws_generate_items(
         amount=payload.get("amount", 1),

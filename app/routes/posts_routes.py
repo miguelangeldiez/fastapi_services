@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import logger
 from app.db.main_db import get_db_session
-from app.routes.auth_routes import current_active_user
+from app.services.auth_service import current_active_user
 from app.db.models import Post, User
 from .schemas import (
     PostCreate,
