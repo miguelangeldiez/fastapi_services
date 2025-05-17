@@ -3,9 +3,8 @@ import asyncio
 
 from app.routes.schemas import CommentRequest, PostRequest, UserRequest
 from app.services.auth_service import current_active_user, get_token_from_cookie, get_user_manager
-from app.db.models import User
+from app.db import User,get_db_session
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.main_db import get_db_session
 from app.config import logger
 from app.services.synthetic_service import create_batch, create_fake_user, create_fake_post, create_fake_comment, set_fake_seed
 from sqlalchemy.exc import IntegrityError
@@ -24,9 +23,6 @@ async def generate_users(
     db: AsyncSession = Depends(get_db_session),
     user_manager = Depends(get_user_manager),
 ):
-    """
-    Genera usuarios ficticios y los registra directamente en la base de datos.
-    """
     set_fake_seed(request.seed)
     if request.seed is not None:
         logger.info(f"Semilla establecida para Faker: {request.seed}")
@@ -36,7 +32,7 @@ async def generate_users(
 
     generated_users = []
     for _ in range(request.num_users):
-        user_data = await create_fake_user(db, batch_id, user_manager=user_manager)
+        user_data = await create_fake_user(db, user_manager=user_manager)
         generated_users.append(user_data)
         await asyncio.sleep(_safe_sleep(request.speed_multiplier))
     logger.info(f"Generación de usuarios completada. Total: {len(generated_users)}")
@@ -49,9 +45,6 @@ async def generate_posts(
     current_user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """
-    Genera publicaciones ficticias y las registra directamente en la base de datos.
-    """
     set_fake_seed(request.seed)
     if request.seed is not None:
         logger.info(f"Semilla establecida para Faker: {request.seed}")
@@ -62,7 +55,7 @@ async def generate_posts(
     generated_posts = []
     for _ in range(request.num_posts):
         try:
-            post_data = await create_fake_post(db, request.user_id, batch_id)
+            post_data = await create_fake_post(db, request.user_id)
         except IntegrityError as e:
             await db.rollback()
             if "foreign key constraint" in str(e).lower() or "violates foreign key" in str(e).lower():
@@ -84,9 +77,6 @@ async def generate_comments(
     current_user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """
-    Genera comentarios ficticios y los registra directamente en la base de datos.
-    """
     set_fake_seed(request.seed)
     if request.seed is not None:
         logger.info(f"Semilla establecida para Faker: {request.seed}")
@@ -96,7 +86,7 @@ async def generate_comments(
 
     generated_comments = []
     for _ in range(request.num_comments):
-        comment_data = await create_fake_comment(db, current_user.id, request.post_id, batch_id)
+        comment_data = await create_fake_comment(db, current_user.id, request.post_id)
         generated_comments.append(comment_data)
         await asyncio.sleep(_safe_sleep(request.speed_multiplier))
     logger.info(f"Generación de comentarios completada. Total: {len(generated_comments)}")

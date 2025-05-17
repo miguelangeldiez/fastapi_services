@@ -2,7 +2,7 @@ import csv
 from io import BytesIO, StringIO
 
 from fastapi.responses import StreamingResponse
-from app.db.models import Comment, Post, User
+from app.db import Comment, Post, User
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet

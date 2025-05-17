@@ -8,8 +8,7 @@ from fastapi_users.authentication import (
 from fastapi_users_db_sqlalchemy import SQLAlchemyUserDatabase
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.main_db import get_db_session
-from app.db.models import User
+from app.db import get_db_session,User
 from app.config import settings
 import uuid
 from typing import AsyncGenerator

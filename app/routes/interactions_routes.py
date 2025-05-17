@@ -4,9 +4,8 @@ from sqlalchemy import select
 
 from fastapi import APIRouter, Depends, HTTPException,status
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.main_db import get_db_session
+from app.db import get_db_session,Post, Comment, Like, User
 from app.services.auth_service import current_active_user
-from app.db.models import Post, Comment, Like, User
 from .schemas import (
     CommentCreate,
     CommentOut,

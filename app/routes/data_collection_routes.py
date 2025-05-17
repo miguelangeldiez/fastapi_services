@@ -1,31 +1,35 @@
 from uuid import UUID
 from fastapi import APIRouter, Query, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, join
 
 
-from app.db.models import Batch, User, Post, Comment
-from app.db.main_db import get_db_session
+from app.db import Batch, User, Post, Comment,get_db_session
 from app.services.auth_service import current_active_user
 from app.config import logger
 from app.services.data_collection_service import csv_response, pdf_response, to_dict_comment, to_dict_post, to_dict_user
 
 data_router = APIRouter(prefix="/data", tags=["Data Collection"])
 
-@data_router.get("/users", summary="Obtener usuarios generados")
+@data_router.get("/users", summary="Obtener usuario dueño del batch")
 async def get_users(
     batch_id: UUID = Query(..., description="Identificador del lote"),
     format: str = Query("json", enum=["json", "csv", "pdf"]),
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(current_active_user),
 ):
-    logger.info(f"Obteniendo usuarios generados para batch_id: {batch_id} en formato: {format}")
-    query = await session.execute(
-        select(User).where(User.batch_id == batch_id)
-    )
-    users = query.scalars().all()
-    logger.info(f"Usuarios obtenidos: {len(users)}")
-    data = [to_dict_user(u) for u in users]
+    logger.info(f"Obteniendo usuario para batch_id: {batch_id} en formato: {format}")
+    batch = await session.get(Batch, batch_id)
+    if not batch or batch.user_id != current_user.id:
+        logger.info("Batch no encontrado o no pertenece al usuario autenticado.")
+        return {"data": []}
+
+    user = await session.get(User, batch.user_id)
+    if not user:
+        logger.info("Usuario no encontrado para el batch.")
+        return {"data": []}
+
+    data = [to_dict_user(user)]
 
     if format == "csv":
         return csv_response(data, ["id", "email", "is_active", "is_superuser", "is_verified"], "users.csv")
@@ -37,41 +41,42 @@ async def get_users(
 @data_router.get("/posts", summary="Obtener publicaciones generadas")
 async def get_posts(
     batch_id: UUID = Query(..., description="Identificador del lote"),
-    format: str = Query("json", enum=["json", "csv", "pdf"]),
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(current_active_user),
 ):
-    logger.info(f"Obteniendo publicaciones generadas para batch_id: {batch_id} en formato: {format}")
-    query = await session.execute(select(Post).where(Post.batch_id == batch_id))
+    # Busca el batch y su user_id
+    batch = await session.get(Batch, batch_id)
+    if not batch or batch.user_id != current_user.id:
+        return {"data": []}
+    # Busca los posts del usuario que creó el batch
+    query = await session.execute(
+        select(Post).where(Post.user_id == batch.user_id)
+    )
     posts = query.scalars().all()
-    logger.info(f"Publicaciones obtenidas: {len(posts)}")
     data = [to_dict_post(p) for p in posts]
-
-    if format == "csv":
-        return csv_response(data, ["id", "title", "content", "is_published", "user_id"], "posts.csv")
-    elif format == "pdf":
-        rows = [[d["id"], d["title"], "Sí" if d["is_published"] else "No"] for d in data]
-        return pdf_response("Posts generados", ["ID", "Titulo", "Publicado"], rows, "posts.pdf")
     return {"data": data}
 
 @data_router.get("/comments", summary="Obtener comentarios generados")
 async def get_comments(
     batch_id: UUID = Query(..., description="Identificador del lote"),
-    format: str = Query("json", enum=["json", "csv", "pdf"]),
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(current_active_user),
 ):
-    logger.info(f"Obteniendo comentarios generados para batch_id: {batch_id} en formato: {format}")
-    query = await session.execute(select(Comment).where(Comment.batch_id == batch_id))
-    comments = query.scalars().all()
-    logger.info(f"Comentarios obtenidos: {len(comments)}")
+    batch = await session.get(Batch, batch_id)
+    if not batch or batch.user_id != current_user.id:
+        return {"data": []}
+    # Busca los comentarios de los posts del usuario que creó el batch
+    posts_query = await session.execute(
+        select(Post.id).where(Post.user_id == batch.user_id)
+    )
+    post_ids = [pid for pid, in posts_query.all()]
+    if not post_ids:
+        return {"data": []}
+    comments_query = await session.execute(
+        select(Comment).where(Comment.post_id.in_(post_ids))
+    )
+    comments = comments_query.scalars().all()
     data = [to_dict_comment(c) for c in comments]
-
-    if format == "csv":
-        return csv_response(data, ["id", "content", "post_id", "user_id"], "comments.csv")
-    elif format == "pdf":
-        rows = [[d["id"], d["content"], d["post_id"]] for d in data]
-        return pdf_response("Comentarios generados", ["ID", "Contenido", "Post ID"], rows, "comments.pdf")
     return {"data": data}
 
 @data_router.get("/batches", summary="Obtener todos los batch_id del usuario autenticado")

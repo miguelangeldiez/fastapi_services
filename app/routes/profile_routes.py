@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.main_db import get_db_session
+from app.db import get_db_session,User, Post
 from app.services.auth_service import current_active_user
-from app.db.models import User, Post
+
 from .schemas import PaginatedPostsResponse, UserRead
 
 profile_router = APIRouter(

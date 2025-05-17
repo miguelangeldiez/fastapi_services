@@ -1,7 +1,3 @@
-"""
-Inicialización de la base de datos y sesión asíncrona para SQLAlchemy.
-"""
-
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import declarative_base
