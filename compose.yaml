@@ -14,9 +14,14 @@ services:
       postgres-db:
         condition: service_healthy
     volumes:
+      - ./:/app
       - ./certs:/certs:ro
     networks:
       - backend
+    command: >
+      uvicorn main:app --host 0.0.0.0 --port 8000
+      --ssl-keyfile /certs/threadfit.local-key.pem
+      --ssl-certfile /certs/threadfit.local.pem
 
   postgres-db:
     image: postgres:17

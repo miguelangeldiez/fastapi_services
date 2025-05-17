@@ -13,8 +13,6 @@ class UserRead(schemas.BaseUser[UUID]):
 
 class UserCreate(schemas.BaseUserCreate):
     """Datos requeridos para crear un usuario."""
-    batch_id: Optional[UUID] = None
-
     model_config = ConfigDict(
         from_attributes=True,
         populate_by_name=True,

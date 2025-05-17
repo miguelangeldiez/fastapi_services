@@ -14,7 +14,16 @@ from app.db.main_db import get_db_session
 from app.db.models import User
 from app.routes import generation_routes
 from app.routes.schemas import WSMessage
-from app.config.config import logger, get_settings
+from app.config import logger, get_settings
+from app.services.synthetic_service import (
+    create_batch,
+    create_fake_user,
+    create_fake_post,
+    create_fake_comment,
+)
+from app.db.main_db import async_session
+import uuid
+import asyncio
 
 settings = get_settings()
 
@@ -57,9 +66,31 @@ manager = ConnectionManager()
 # Mapeo de acciones a funciones generadoras asíncronas
 ActionHandler = Callable[[Dict[str, Any], float], AsyncIterable[Dict[str, Any]]]
 ACTION_MAP: Dict[str, ActionHandler] = {
-    "generate_users": generation_routes.gen_users_ws,
-    "generate_posts": generation_routes.gen_posts_ws,
-    "generate_comments": generation_routes.gen_comments_ws,
+    "generate_users": lambda payload, speed: ws_generate_items(
+        amount=payload.get("amount", 1),
+        create_fn=create_fake_user,
+        batch_id=payload.get("batch_id"),
+        batch_check_user_id=payload.get("user_id"),
+        speed=speed,
+        batch_id=payload.get("batch_id") or str(uuid.uuid4()),
+    ),
+    "generate_posts": lambda payload, speed: ws_generate_items(
+        amount=payload.get("amount", 1),
+        create_fn=create_fake_post,
+        user_id=payload.get("user_id"),
+        batch_id=payload.get("batch_id") or str(uuid.uuid4()),
+        batch_check_user_id=payload.get("user_id"),
+        speed=speed,
+    ),
+    "generate_comments": lambda payload, speed: ws_generate_items(
+        amount=payload.get("amount", 1),
+        create_fn=create_fake_comment,
+        user_id=payload.get("user_id"),
+        post_id=payload.get("post_id"),
+        batch_id=payload.get("batch_id") or str(uuid.uuid4()),
+        batch_check_user_id=payload.get("user_id"),
+        speed=speed,
+    ),
 }
 
 @websocket_router.websocket("/generate")
@@ -182,3 +213,22 @@ async def _authenticate_ws(ws: WebSocket, db: AsyncSession) -> User:
         await ws.close(code=status.WS_1008_POLICY_VIOLATION)
         raise WebSocketDisconnect()
     return user
+
+async def ws_generate_items(
+    amount: int,
+    create_fn,
+    *args,
+    speed: float = 1.0,
+    batch_check_user_id: str = None,
+    batch_id: str = None,
+    **kwargs
+):
+    if batch_check_user_id and not batch_id:
+        batch_id = str(uuid.uuid4())
+        async with async_session() as db:
+            await create_batch(db, batch_check_user_id)
+    for _ in range(amount):
+        async with async_session() as db:
+            item = await create_fn(db, *args, **kwargs)
+        yield item
+        await asyncio.sleep(max(0.01, 1.0 / speed))
