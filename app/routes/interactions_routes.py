@@ -1,11 +1,10 @@
 import uuid
 from typing import List
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from fastapi import APIRouter, Depends, HTTPException,status
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import logger
+from app.config import logger
 from app.db.main_db import get_db_session
 from app.routes.auth_routes import current_active_user
 from app.db.models import Post, Comment, Like, User
@@ -32,13 +31,9 @@ async def get_comments(
     """
     Devuelve los comentarios de una publicación específica.
     """
-    result = await db.execute(
-        select(Post).options(selectinload(Post.comments)).where(Post.id == post_id)
-    )
-    post = result.scalar_one_or_none()
-    if not post:
-        raise HTTPException(status_code=404, detail="Publicación no encontrada.")
-    return post.comments
+    result = await db.execute(select(Comment).where(Comment.post_id == post_id))
+    comments = result.scalars().all()
+    return comments  # Devuelve lista vacía si no hay comentarios
 
 @interactions_router.post(
     "/{post_id}/comments",

@@ -1,4 +1,4 @@
-from fastapi import APIRouter 
+from fastapi import APIRouter
 from app.routes.dependencies import get_user_manager
 from app.routes.schemas import UserCreate, UserRead
 from fastapi_users import FastAPIUsers
@@ -9,46 +9,47 @@ from fastapi_users.authentication import (
 )
 import uuid
 from app.db.models import User
-from config import get_settings, logger
-# Initialize settings
-settings = get_settings()
+from app.config import settings
+
+# --- Configuración de autenticación JWT vía cookie ---
 
 def get_jwt_strategy() -> JWTStrategy:
+    """
+    Retorna la estrategia JWT configurada con los parámetros del entorno.
+    """
     return JWTStrategy(
         secret=settings.JWT_SECRET_KEY,
         lifetime_seconds=settings.JWT_LIFETIME_SECONDS,
     )
 
-# --- Configuración de autenticación JWT vía cookie ---
-
-# 1) Definimos el transporte que usará cookies
+# 1) Definir el transporte de autenticación por cookie
 cookie_transport = CookieTransport(
     cookie_name=settings.COOKIE_NAME,
     cookie_max_age=settings.JWT_LIFETIME_SECONDS,
-    cookie_secure=True,  
-    cookie_httponly=True  
-)  # :contentReference[oaicite:4]{index=4}
+    cookie_secure=True,      # Solo enviar la cookie por HTTPS
+    cookie_httponly=True     # No accesible desde JavaScript
+)
 
-# 2) Backend de autenticación
+# 2) Configurar el backend de autenticación
 auth_backend = AuthenticationBackend(
     name="jwt",
     transport=cookie_transport,
     get_strategy=get_jwt_strategy,
-)  # :contentReference[oaicite:6]{index=6}
+)
 
-# 4) Instanciamos FastAPIUsers
+# 3) Instanciar FastAPIUsers con el UserManager y el backend configurado
 fastapi_users = FastAPIUsers[User, uuid.UUID](
     get_user_manager,
     [auth_backend],
 )
 
-# 5) Dependencia para obtener el usuario activo
+# 4) Dependencia para obtener el usuario activo autenticado
 current_active_user = fastapi_users.current_user(active=True)
 
+# 5) Definir el router de autenticación
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
-# Login JWT
-auth_router.include_router(fastapi_users.get_auth_router(auth_backend))
 
-# Registro de usuarios
+# 6) Incluir rutas de autenticación y registro de usuarios
+auth_router.include_router(fastapi_users.get_auth_router(auth_backend))
 auth_router.include_router(fastapi_users.get_register_router(UserRead, UserCreate))
 

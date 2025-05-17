@@ -1,18 +1,20 @@
-
 from math import ceil
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.main_db import get_db_session
 from app.routes.auth_routes import current_active_user
-from app.db.models import User ,Post  
-from .schemas import PaginatedPostsResponse,UserRead
-from config import logger
+from app.db.models import User, Post
+from .schemas import PaginatedPostsResponse, UserRead
+from app.config.config import logger
 
-
-profile_router = APIRouter(prefix="/user", tags=["Profile Settings"],dependencies=[Depends(current_active_user)])
+profile_router = APIRouter(
+    prefix="/user",
+    tags=["Profile Settings"],
+    dependencies=[Depends(current_active_user)]
+)
 
 @profile_router.get(
     "/profile",
@@ -25,7 +27,6 @@ async def profile(user: User = Depends(current_active_user)):
     """
     return user
 
-
 @profile_router.get(
     "/{user_id}/posts",
     response_model=PaginatedPostsResponse,
@@ -35,8 +36,8 @@ async def get_user_posts(
     user_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(current_active_user),
-    page: int = 1,
-    per_page: int = 10,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
 ):
     """
     Sólo permite al usuario autenticado ver sus propios posts.
@@ -47,19 +48,14 @@ async def get_user_posts(
             detail="Acceso no autorizado",
         )
 
-    # total de posts
     total_q = await db.execute(
-        select(func.count()).select_from(Post).where(Post.user_id== user_id)
+        select(func.count()).select_from(Post).where(Post.user_id == user_id)
     )
     total = total_q.scalar_one()
 
-    # páginas totales
-    pages = (total + per_page - 1) // per_page
-
-    # consulta paginada
     stmt = (
         select(Post)
-        .where(Post.user_id== user_id)
+        .where(Post.user_id == user_id)
         .order_by(Post.created_at.desc())
         .limit(per_page)
         .offset((page - 1) * per_page)
@@ -67,12 +63,14 @@ async def get_user_posts(
     result = await db.execute(stmt)
     posts = result.scalars().all()
 
+    pages = ceil(total / per_page) if per_page else 1
+
     return PaginatedPostsResponse(
-        posts=posts,  # lista de PostOut
-        total=total,  # conteo total de registros
-        pages=ceil(total / per_page),  # total de páginas
-        current_page=page,  # página actual
-        per_page=per_page,  # elementos por página
-        has_next=(page * per_page) < total,  # hay siguiente?
-        has_prev=page > 1,  # hay anterior?
+        posts=posts,
+        total=total,
+        pages=pages,
+        current_page=page,
+        per_page=per_page,
+        has_next=(page * per_page) < total,
+        has_prev=page > 1,
     )

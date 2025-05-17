@@ -1,75 +1,78 @@
 from __future__ import annotations
 
-import logging
-from typing import Any, AsyncIterable, Awaitable, Callable, Dict, Final
-from uuid import UUID
+from typing import Any, AsyncIterable, Callable, Dict, Final
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, status
 from fastapi.websockets import WebSocketState
-from jose import JWTError, jwt 
+from jose import JWTError, jwt
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.db.main_db import get_db_session
 from app.db.models import User
-from app.synthetic_data import generation_routes
-from app.synthetic_data.schemas import WSMessage
-from config import get_settings,logger
+from app.routes import generation_routes
+from app.routes.schemas import WSMessage
+from app.config.config import logger, get_settings
 
-# ──────────────────────────────────────────────
-# Configuración global
-# ──────────────────────────────────────────────
-logger = logging.getLogger(__name__)
 settings = get_settings()
 
 MAX_WS_PER_USER: Final[int] = 5
-JWT_ALG: Final[str] = "HS256"
+JWT_ALG: Final[str] = settings.JWT_ALGORITHM
+COOKIE_NAME: Final[str] = settings.COOKIE_NAME
 
 websocket_router = APIRouter(prefix="/ws", tags=["websockets-generation"])
 
-# ──────────────────────────────────────────────
-# Conexiones
-# ──────────────────────────────────────────────
 class ConnectionManager:
+    """
+    Gestiona el número de conexiones WebSocket activas por usuario.
+    Limita a MAX_WS_PER_USER conexiones concurrentes por usuario.
+    """
     def __init__(self) -> None:
         self._active: Dict[UUID, int] = {}
 
     async def connect(self, ws: WebSocket, user_id: UUID) -> None:
-        if self._active.get(user_id, 0) >= MAX_WS_PER_USER:
+        """
+        Acepta una nueva conexión si el usuario no ha superado el límite.
+        """
+        count = self._active.get(user_id, 0)
+        if count >= MAX_WS_PER_USER:
             await ws.close(code=status.WS_1008_POLICY_VIOLATION)
             return
         await ws.accept()
-        self._active[user_id] = self._active.get(user_id, 0) + 1
+        self._active[user_id] = count + 1
 
     def disconnect(self, user_id: UUID) -> None:
+        """
+        Elimina una conexión activa del usuario.
+        """
         if user_id in self._active:
             self._active[user_id] -= 1
-            if self._active[user_id] == 0:
+            if self._active[user_id] <= 0:
                 self._active.pop(user_id, None)
-
 
 manager = ConnectionManager()
 
-# ──────────────────────────────────────────────
-# Mapeo acción → función generadora
-# ──────────────────────────────────────────────
+# Mapeo de acciones a funciones generadoras asíncronas
 ActionHandler = Callable[[Dict[str, Any], float], AsyncIterable[Dict[str, Any]]]
-
 ACTION_MAP: Dict[str, ActionHandler] = {
     "generate_users": generation_routes.gen_users_ws,
     "generate_posts": generation_routes.gen_posts_ws,
     "generate_comments": generation_routes.gen_comments_ws,
 }
 
-# ──────────────────────────────────────────────
-# WebSocket endpoint
-# ──────────────────────────────────────────────
 @websocket_router.websocket("/generate")
 async def websocket_generate(
     ws: WebSocket,
     db: AsyncSession = Depends(get_db_session),
 ) -> None:
+    """
+    Endpoint principal para generación sintética vía WebSocket.
+    Autentica al usuario, gestiona el ciclo de vida y enruta acciones.
+    Espera mensajes con formato: {"action": str, "payload": dict, "speed_multiplier": float}
+    """
+    user = None
     logger.info("Nueva conexión WebSocket iniciada.")
     try:
         user = await _authenticate_ws(ws, db)
@@ -81,11 +84,14 @@ async def websocket_generate(
             try:
                 raw = await ws.receive_json()
                 logger.info(f"Mensaje recibido: {raw}")
-                msg = WSMessage(**raw)  # valida
+                msg = WSMessage(**raw)
             except (ValidationError, ValueError) as ve:
                 logger.error(f"Error al validar el mensaje: {ve}")
                 await ws.send_json({"type": "error", "detail": str(ve)})
                 continue
+            except WebSocketDisconnect:
+                logger.info("WebSocket desconectado por el cliente.")
+                break
 
             handler = ACTION_MAP.get(msg.action)
             if not handler:
@@ -103,18 +109,18 @@ async def websocket_generate(
         if ws.application_state != WebSocketState.DISCONNECTED:
             await ws.close(code=status.WS_1011_INTERNAL_ERROR)
     finally:
-        manager.disconnect(user.id)
-        logger.info(f"Conexión WebSocket cerrada para el usuario {user.id}")
+        if user:
+            manager.disconnect(user.id)
+            logger.info(f"Conexión WebSocket cerrada para el usuario {user.id}")
 
-
-# ──────────────────────────────────────────────
-# Helpers
-# ──────────────────────────────────────────────
 async def _run_generation(
     ws: WebSocket,
     handler: ActionHandler,
     msg: WSMessage,
 ) -> None:
+    """
+    Ejecuta la función generadora asociada a la acción y envía mensajes de progreso.
+    """
     total = 0
     try:
         async for item in handler(msg.payload, msg.speed_multiplier):
@@ -140,20 +146,29 @@ async def _run_generation(
                 {"type": "error", "detail": str(exc), "action": msg.action}
             )
 
-
 async def _authenticate_ws(ws: WebSocket, db: AsyncSession) -> User:
-    token = ws.cookies.get("threadfit_cookie")
+    """
+    Autentica el WebSocket usando el token JWT de la cookie.
+    Cierra la conexión si la autenticación falla.
+    """
+    token = ws.cookies.get(COOKIE_NAME)
     if not token:
         logger.warning("Intento de conexión WebSocket sin token.")
         await ws.close(code=status.WS_1008_POLICY_VIOLATION)
         raise WebSocketDisconnect()
 
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[JWT_ALG], audience="fastapi-users:auth")
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[JWT_ALG],
+            audience="fastapi-users:auth"
+        )
         user_id = payload.get("sub")
         if not user_id:
             raise JWTError("El token no contiene el campo 'sub'.")
-    except JWTError as e:
+        user_id = UUID(user_id)
+    except (JWTError, ValueError) as e:
         logger.error(f"Error al decodificar el token JWT: {e}")
         await ws.close(code=status.WS_1008_POLICY_VIOLATION)
         raise WebSocketDisconnect()

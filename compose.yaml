@@ -1,5 +1,6 @@
 services:
   fastapi-server:
+    image: fastapi-server:latest
     build:
       context: .
     restart: unless-stopped
@@ -39,4 +40,3 @@ networks:
 
 volumes:
   pgdata:
-    # Persistent storage for PostgreSQL data

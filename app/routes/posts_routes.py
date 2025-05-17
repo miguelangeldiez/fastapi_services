@@ -1,11 +1,11 @@
-import uuid
 from math import ceil
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
-
-from fastapi import APIRouter, Depends, HTTPException,status
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import logger
+
+from app.config import logger
 from app.db.main_db import get_db_session
 from app.routes.auth_routes import current_active_user
 from app.db.models import Post, User
@@ -20,17 +20,19 @@ posts_router = APIRouter(
     prefix="/posts", tags=["Posts Settings"]
 )
 
-
 @posts_router.get(
     "/all_posts",
     response_model=PaginatedPostsResponse,
     summary="Listar todas las publicaciones paginadas",
 )
 async def get_all_posts(
-    page: int = 1,
-    per_page: int = 10,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
     db: AsyncSession = Depends(get_db_session),
 ) -> PaginatedPostsResponse:
+    """
+    Devuelve todas las publicaciones paginadas.
+    """
     logger.info(f"Solicitud para listar publicaciones: page={page}, per_page={per_page}")
     total_stmt = select(func.count()).select_from(Post)
     total_result = await db.execute(total_stmt)
@@ -50,16 +52,17 @@ async def get_all_posts(
     posts = result.scalars().all()
     logger.info(f"Publicaciones obtenidas: {len(posts)}")
 
+    pages = ceil(total / per_page) if per_page else 1
+
     return PaginatedPostsResponse(
         posts=posts,
         total=total,
-        pages=ceil(total / per_page),
+        pages=pages,
         current_page=page,
         per_page=per_page,
         has_next=(page * per_page) < total,
         has_prev=page > 1,
     )
-
 
 @posts_router.post(
     "/create_post",
@@ -73,35 +76,30 @@ async def create_post(
     db: AsyncSession = Depends(get_db_session),
     user: User = Depends(current_active_user),
 ):
+    """
+    Crea una nueva publicación para el usuario autenticado.
+    """
     new_post = Post(
         title=payload.title,
         content=payload.content,
         is_published=payload.is_published,
         user_id=user.id,
     )
-    
     try:
         db.add(new_post)
-        # fuerza el INSERT
-        await db.flush()              
-        # confirma la transacción
-        await db.commit()             
-        # recarga el objeto con valores de BD
-        await db.refresh(new_post)    
+        await db.commit()
+        await db.refresh(new_post)
     except Exception as e:
-        import traceback; traceback.print_exc()
-        # revierte si algo falla
-        await db.rollback()           
+        logger.exception("Error al crear la publicación")
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al crear la publicación: {e}"
         )
-  
     return MessageResponse(msg="Publicación creada con éxito.", data=new_post)
 
-
 @posts_router.delete(
-    "/delete_post/{post_id}",
+    "/{post_id}",
     response_model=MessageResponse[None],
     status_code=status.HTTP_200_OK,
     summary="Eliminar una publicación",
@@ -112,6 +110,9 @@ async def delete_post(
     db: AsyncSession = Depends(get_db_session),
     user: User = Depends(current_active_user),
 ):
+    """
+    Elimina una publicación del usuario autenticado.
+    """
     post = await db.get(Post, post_id)
     if not post or post.user_id != user.id:
         raise HTTPException(
@@ -121,11 +122,11 @@ async def delete_post(
     try:
         await db.delete(post)
         await db.commit()
-    except Exception:
+    except Exception as e:
+        logger.exception("Error al eliminar la publicación")
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error al eliminar la publicación."
         )
-
     return MessageResponse(msg="Publicación eliminada con éxito.", data=None)

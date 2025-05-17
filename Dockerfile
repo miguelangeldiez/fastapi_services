@@ -1,30 +1,33 @@
-# Dockerfile
-
-# Imagen base liviana con Python 3.13 y herramientas necesarias
+# Imagen base de Python 3.13 en Alpine
 FROM python:3.13-alpine
 
-# Instala dependencias del sistema necesarias
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libffi-dev \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Crea usuario sin privilegios
+RUN adduser -D appuser
 
-# Establece directorio de trabajo
+# Instala dependencias necesarias para compilar algunos paquetes (ej. psycopg2, cryptography)
+RUN apk add --no-cache \
+    gcc \
+    musl-dev \
+    libffi-dev \
+    postgresql-dev \
+    libpq
+
+# Establece el directorio de trabajo
 WORKDIR /app
 
-# Copia dependencias
+# Copia e instala dependencias
 COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Instala dependencias de Python
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
-
-# Copia el código fuente
+# Copia el resto del código de la app
 COPY . .
 
-# Expone el puerto para FastAPI
+# Cambia al usuario sin privilegios
+USER appuser
+
+# Expone el puerto
 EXPOSE 8000
 
-# Comando por defecto para levantar el microservicio con HTTPS
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--ssl-keyfile", "/certs/localhost-key.pem", "--ssl-certfile", "/certs/localhost.pem", "--reload"]
+# Comando por defecto
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

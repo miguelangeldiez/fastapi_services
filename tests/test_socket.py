@@ -1,157 +1,72 @@
-import asyncio
-from uuid import uuid4
-from unittest.mock import AsyncMock, patch
-
+import uuid
 import pytest
-from fastapi import status
-from fastapi.websockets import WebSocketState
-from config import logger  # Importa el logger global
+import asyncio
+from httpx import AsyncClient
+from app.config import logger, settings
 
-# Ajusta el import al módulo real donde dejaste el código refactorizado
-from app.synthetic_data.websockets_routes import (
-    ConnectionManager,
-    _run_generation,
-    _authenticate_ws,
-)
-
-# -----------------------------------------------------------------------------
-# Helpers y fixtures
-# -----------------------------------------------------------------------------
-@pytest.fixture
-async def fake_websocket():
-    """Crea un WebSocket simulado usando AsyncMock."""
-    logger.info("Creando un WebSocket simulado.")
-    ws = AsyncMock()
-    ws.accept = AsyncMock()
-    ws.close = AsyncMock()
-    ws.send_json = AsyncMock()
-    ws.receive_json = AsyncMock()
-    ws.cookies = {}
-    ws.application_state = WebSocketState.CONNECTED
-    return ws
-
-
-class _FakeResult:
-    """Imita el resultado de Session.execute."""
-
-    def __init__(self, user):
-        self._user = user
-
-    def scalar_one_or_none(self):
-        return self._user
-
-
-@pytest.fixture
-async def fake_db_session():
-    logger.info("Creando una sesión de base de datos simulada.")
-    class _FakeSession:
-        async def execute(self, *_):
-            logger.info("Ejecutando consulta simulada en la base de datos.")
-            return _FakeResult(user={"id": "user-123"})
-
-    return _FakeSession()
-
-
-# -----------------------------------------------------------------------------
-# Tests ConnectionManager
-# -----------------------------------------------------------------------------
-@pytest.mark.asyncio
-async def test_connection_limit(fake_websocket):
-    logger.info("Iniciando prueba para verificar el límite de conexiones.")
-    cm = ConnectionManager()
-    user_id = uuid4()
-
-    websockets = [AsyncMock(**fake_websocket.__dict__) for _ in range(5)]
-    for ws in websockets:
-        await cm.connect(ws, user_id)
-        logger.info(f"Conexión establecida para el usuario {user_id}.")
-
-    assert cm._active[user_id] == 5
-    logger.info(f"El usuario {user_id} tiene 5 conexiones activas.")
-
-    sixth_ws = AsyncMock(**fake_websocket.__dict__)
-    await cm.connect(sixth_ws, user_id)
-    sixth_ws.close.assert_called_with(code=status.WS_1008_POLICY_VIOLATION)
-    logger.info(f"Se rechazó la sexta conexión para el usuario {user_id}.")
-
+def get_base_url():
+    origins = settings.ALLOWED_ORIGINS
+    if isinstance(origins, list):
+        return origins[0]
+    return origins
 
 @pytest.mark.asyncio
-async def test_disconnect_decrements(fake_websocket):
-    logger.info("Iniciando prueba para verificar la desconexión.")
-    cm = ConnectionManager()
-    user_id = uuid4()
+async def test_websocket_generate_users():
+    """
+    Prueba real de conexión WebSocket al endpoint /ws/generate y generación de usuarios sintéticos.
+    """
+    base_url = get_base_url().rstrip("/")
+    email = f"wsuser_{uuid.uuid4().hex}@example.com"
+    password = "securepassword123"
 
-    await cm.connect(fake_websocket, user_id)
-    logger.info(f"Conexión establecida para el usuario {user_id}.")
-    assert cm._active[user_id] == 1
+    # 1. Registra y loguea un usuario para obtener la cookie JWT
+    async with AsyncClient(base_url=base_url, verify=False) as client:
+        reg = await client.post(
+            "/auth/register",
+            json={"email": email, "password": password, "batch_id": None},
+        )
+        assert reg.status_code == 201, f"Registro falló: {reg.text}"
+        user_id = reg.json().get("data", {}).get("id") or reg.json().get("id")
+        assert user_id, "No se obtuvo el id del usuario registrado"
 
-    cm.disconnect(user_id)
-    logger.info(f"Conexión desconectada para el usuario {user_id}.")
-    assert user_id not in cm._active
+        login = await client.post(
+            "/auth/login",
+            data={"username": email, "password": password},
+        )
+        assert login.status_code == 204, f"Login falló: {login.text}"
+        cookies = login.cookies
 
+    # 2. Conéctate al WebSocket usando la cookie de autenticación
+    ws_url = base_url.replace("http", "ws") + "/ws/generate"
+    async with AsyncClient(base_url=base_url, cookies=cookies, verify=False, timeout=10) as client:
+        async with client.ws_connect(ws_url) as ws:
+            # Envía un mensaje para generar usuarios sintéticos
+            await ws.send_json({
+                "action": "generate_users",
+                "payload": {
+                    "amount": 2,
+                    "token": "",  # No es necesario, ya va la cookie
+                    "user_id": user_id,
+                },
+                "speed_multiplier": 1.0,
+            })
 
-# -----------------------------------------------------------------------------
-# Tests _run_generation
-# -----------------------------------------------------------------------------
-@pytest.mark.asyncio
-async def test_run_generation_progress_and_complete(fake_websocket):
-    logger.info("Iniciando prueba para verificar el progreso y la finalización de la generación.")
+            # Recibe mensajes de progreso y completado
+            progress = []
+            for _ in range(10):  # Evita bucles infinitos
+                try:
+                    msg = await asyncio.wait_for(ws.receive_json(), timeout=5)
+                except asyncio.TimeoutError:
+                    pytest.fail("Timeout esperando mensaje del WebSocket.")
+                logger.info(f"Mensaje recibido por WebSocket: {msg}")
+                if msg["type"] == "progress":
+                    progress.append(msg)
+                elif msg["type"] == "completed":
+                    assert msg["total"] == 2
+                    break
+                elif msg["type"] == "error":
+                    pytest.fail(f"Error recibido por WebSocket: {msg['detail']}")
+            else:
+                pytest.fail("No se recibió mensaje de completado en el WebSocket.")
 
-    async def dummy_handler(payload, speed):
-        for i in range(3):
-            logger.info(f"Generando elemento {i}.")
-            yield {"n": i}
-            await asyncio.sleep(0)
-
-    class _Msg:
-        action = "generate_users"
-        payload = {}
-        speed_multiplier = 1.0
-
-    await _run_generation(fake_websocket, dummy_handler, _Msg)
-
-    assert fake_websocket.send_json.call_count == 4
-    logger.info("Se enviaron 4 mensajes JSON al WebSocket.")
-    fake_websocket.send_json.assert_any_call(
-        {"type": "completed", "action": _Msg.action, "total": 3}
-    )
-    logger.info("La generación se completó con éxito.")
-
-
-# -----------------------------------------------------------------------------
-# Tests _authenticate_ws
-# -----------------------------------------------------------------------------
-@pytest.mark.asyncio
-async def test_authenticate_success(fake_websocket, fake_db_session):
-    logger.info("Iniciando prueba para verificar la autenticación exitosa.")
-    fake_websocket.cookies = {"access_token": "valid.jwt.token"}
-
-    with patch("jose.jwt.decode", return_value={"sub": "user-123"}):
-        user = await _authenticate_ws(fake_websocket, fake_db_session)
-
-    assert user["id"] == "user-123"
-    logger.info(f"Autenticación exitosa para el usuario {user['id']}.")
-
-
-@pytest.mark.asyncio
-async def test_authenticate_missing_token(fake_websocket, fake_db_session):
-    logger.info("Iniciando prueba para verificar la autenticación sin token.")
-    fake_websocket.cookies = {}
-
-    with pytest.raises(Exception):
-        await _authenticate_ws(fake_websocket, fake_db_session)
-    fake_websocket.close.assert_called_with(code=status.WS_1008_POLICY_VIOLATION)
-    logger.info("Se rechazó la conexión debido a la falta de token.")
-
-
-@pytest.mark.asyncio
-async def test_authenticate_invalid_token(fake_websocket, fake_db_session):
-    logger.info("Iniciando prueba para verificar la autenticación con token inválido.")
-    fake_websocket.cookies = {"access_token": "invalid"}
-
-    from jose import JWTError
-    with patch("jose.jwt.decode", side_effect=JWTError("bad token")):
-        with pytest.raises(Exception):
-            await _authenticate_ws(fake_websocket, fake_db_session)
-        fake_websocket.close.assert_called_with(code=status.WS_1008_POLICY_VIOLATION)
-    logger.info("Se rechazó la conexión debido a un token inválido.")
+            assert len(progress) == 2

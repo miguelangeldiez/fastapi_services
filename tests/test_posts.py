@@ -3,18 +3,25 @@
 import uuid
 import pytest
 from httpx import AsyncClient
-from config import get_settings, logger
+from app.config import settings, logger
 
-settings = get_settings()
 PASSWORD = "securepassword123"
 
-# Example for test_create_post
+def get_base_url():
+    """
+    Devuelve el primer origen permitido como base_url para httpx.
+    """
+    origins = settings.ALLOWED_ORIGINS
+    if isinstance(origins, list):
+        return origins[0]
+    return origins
+
 @pytest.mark.asyncio
 async def test_create_post():
     logger.info("Iniciando prueba para crear una publicación.")
     email = f"poster_{uuid.uuid4().hex}@example.com"
 
-    async with AsyncClient(base_url=settings.ALLOWED_ORIGINS, verify=False) as client:
+    async with AsyncClient(base_url=get_base_url(), verify=False) as client:
         logger.info(f"Registrando usuario con email: {email}")
         reg = await client.post(
             "/auth/register",
@@ -39,15 +46,15 @@ async def test_create_post():
         )
         assert resp.status_code == 201, resp.text
         logger.info("Publicación creada con éxito.")
-    data = resp.json()["data"] # Accede al objeto `data`
-    assert data["title"] == "Mi título"
-    assert data["content"] == "Contenido chulo"
+        data = resp.json()["data"]  # Accede al objeto `data`
+        assert data["title"] == "Mi título"
+        assert data["content"] == "Contenido chulo"
 
 @pytest.mark.asyncio
 async def test_list_posts():
     email = f"poster2_{uuid.uuid4().hex}@example.com"
 
-    async with AsyncClient(base_url=settings.ALLOWED_ORIGINS, verify=False) as client:
+    async with AsyncClient(base_url=get_base_url(), verify=False) as client:
         # Registro + login
         reg = await client.post(
             "/auth/register",
@@ -65,9 +72,9 @@ async def test_list_posts():
         # Listar posts paginados
         client.cookies.update(cookies)  # Configura las cookies en el cliente
         resp = await client.get("/posts/all_posts?page=1&per_page=10")
-    assert resp.status_code == 200, resp.text
-    page = resp.json()
-    # Debe devolver un dict con items y metadatos
-    assert isinstance(page, dict)
-    assert "posts" in page and isinstance(page["posts"], list)
-    assert page["current_page"] == 1
+        assert resp.status_code == 200, resp.text
+        page = resp.json()
+        # Debe devolver un dict con items y metadatos
+        assert isinstance(page, dict)
+        assert "posts" in page and isinstance(page["posts"], list)
+        assert page["current_page"] == 1

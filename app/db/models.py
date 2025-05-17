@@ -1,12 +1,16 @@
 # models.py
 import uuid
-from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey, UniqueConstraint,func
+from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from fastapi_users_db_sqlalchemy import SQLAlchemyBaseUserTableUUID
 from .main_db import Base
 
 class User(SQLAlchemyBaseUserTableUUID, Base):
+    """
+    Modelo de usuario para autenticación y relaciones.
+    batch_id solo se asigna a usuarios ficticios creados por lote.
+    """
     __tablename__ = "users"
     batches = relationship(
         "Batch",
@@ -20,11 +24,17 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     )
     batch = relationship(
         "Batch",
-        backref="generated_users",
-        foreign_keys=[batch_id]  # Especifica la clave foránea
+        back_populates="generated_users",
+        foreign_keys=[batch_id]
     )
 
+    def __repr__(self):
+        return f"<User id={self.id} email={self.email}>"
+
 class Post(Base):
+    """
+    Modelo de publicación.
+    """
     __tablename__ = "posts"
 
     id = Column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4,unique=True,index=True)
@@ -39,6 +49,9 @@ class Post(Base):
     batch_id = Column(UUID(as_uuid=True), ForeignKey("batches.id"), nullable=True)
     batch = relationship("Batch", backref="posts")  # Relación opcional con Batch
 
+    def __repr__(self):
+        return f"<Post id={self.id} title={self.title}>"
+
 class Comment(Base):
     __tablename__ = "comments"
 
@@ -52,6 +65,9 @@ class Comment(Base):
     user = relationship("User", backref="comments")
     post = relationship("Post", back_populates="comments")
 
+    def __repr__(self):
+        return f"<Comment id={self.id}>"
+
 class Like(Base):
     __tablename__ = "likes"
 
@@ -62,6 +78,9 @@ class Like(Base):
     batch_id = Column(UUID(as_uuid=True), nullable=True)
     __table_args__ = (UniqueConstraint("post_id", "user_id", name="unique_like_per_user_post"),)
 
+    def __repr__(self):
+        return f"<Like id={self.id}>"
+
 class Batch(Base):
     __tablename__ = "batches"
 
@@ -69,9 +88,17 @@ class Batch(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    # Relación inversa con el modelo User
+    # Relación inversa: usuarios ficticios generados en este batch
+    generated_users = relationship(
+        "User",
+        back_populates="batch",
+        foreign_keys="[User.batch_id]"
+    )
     user = relationship(
         "User",
-        back_populates="batches",
-        foreign_keys=[user_id]  # Especifica la clave foránea
+        back_populates=None,  # No necesitas batches en User si solo es para usuarios ficticios
+        foreign_keys=[user_id]
     )
+
+    def __repr__(self):
+        return f"<Batch id={self.id}>"

@@ -3,17 +3,25 @@
 import uuid
 import pytest
 from httpx import AsyncClient
-from config import get_settings, logger  # Importa el logger global
+from app.config import settings, logger  # Importa el logger global
 
-settings = get_settings()
 PASSWORD = "securepassword123"
+
+def get_base_url():
+    """
+    Devuelve el primer origen permitido como base_url para httpx.
+    """
+    origins = settings.ALLOWED_ORIGINS
+    if isinstance(origins, list):
+        return origins[0]
+    return origins
 
 @pytest.mark.asyncio
 async def test_create_and_list_comments():
     email = f"commenter_{uuid.uuid4().hex}@example.com"
     logger.info(f"Iniciando prueba para crear y listar comentarios con email: {email}")
 
-    async with AsyncClient(base_url=settings.ALLOWED_ORIGINS, verify=False) as client:
+    async with AsyncClient(base_url=get_base_url(), verify=False) as client:
         # Registro + login
         logger.info(f"Registrando usuario con email: {email}")
         reg = await client.post(
