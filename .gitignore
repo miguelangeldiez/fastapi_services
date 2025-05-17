@@ -5,3 +5,4 @@ __pycache__/
 .vscode/
 /alembic/
 /k8s/
+.pytest_cache/
